@@ -24,9 +24,10 @@ from __future__ import annotations
 import json
 import re
 import shlex
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Iterable, Sequence
+from typing import Any
 
 from .types import ALL_KINDS, VALID_KINDS, Check, CheckKind
 
@@ -168,7 +169,9 @@ class Repo:
         if rel not in self._text_cache:
             path = self.root / rel
             try:
-                self._text_cache[rel] = path.read_text(encoding="utf-8", errors="replace")
+                self._text_cache[rel] = path.read_text(
+                    encoding="utf-8", errors="replace"
+                )
             except OSError:
                 self._text_cache[rel] = None
         return self._text_cache[rel]
@@ -186,7 +189,13 @@ class Repo:
         nothing about this repo, while `.venv/bin/ruff` is a real statement
         about how this repo is checked.
         """
-        for rel in (".venv/bin", ".venv/Scripts", "venv/bin", "env/bin", "node_modules/.bin"):
+        for rel in (
+            ".venv/bin",
+            ".venv/Scripts",
+            "venv/bin",
+            "env/bin",
+            "node_modules/.bin",
+        ):
             candidate = self.root / rel / name
             if candidate.exists():
                 return rel
@@ -197,7 +206,11 @@ class Repo:
             entries = sorted(p for p in self.root.iterdir() if p.is_dir())
         except OSError:  # pragma: no cover - unreadable tree
             return []
-        return [p for p in entries if not p.name.startswith(".") and p.name not in _IGNORED_DIRS]
+        return [
+            p
+            for p in entries
+            if not p.name.startswith(".") and p.name not in _IGNORED_DIRS
+        ]
 
 
 # ── evidence helpers ──────────────────────────────────────────────────────
@@ -211,11 +224,17 @@ def _config_evidence(repo: Repo, tool: str) -> str | None:
             continue
         text = repo.read(filename)
         if text and section in text:
-            return f"{filename} {section}]" if not section.endswith("]") else f"{filename} {section}"
+            return (
+                f"{filename} {section}]"
+                if not section.endswith("]")
+                else f"{filename} {section}"
+            )
     return None
 
 
-def _declared_evidence(repo: Repo, tool: str, files: Sequence[str], globs: Sequence[str]) -> str | None:
+def _declared_evidence(
+    repo: Repo, tool: str, files: Sequence[str], globs: Sequence[str]
+) -> str | None:
     pattern = re.compile(rf"(?<![\w-]){re.escape(tool)}(?![\w-])", re.IGNORECASE)
     for filename in files:
         text = repo.read(filename)
@@ -372,7 +391,14 @@ def _detect_python(repo: Repo) -> list[_Candidate]:
         )
 
     if (text := repo.read("pyproject.toml")) and "[build-system]" in text:
-        add("build", "build", ("python", "-m", "build"), _CONFIG, "pyproject.toml [build-system]", 0)
+        add(
+            "build",
+            "build",
+            ("python", "-m", "build"),
+            _CONFIG,
+            "pyproject.toml [build-system]",
+            0,
+        )
 
     return found
 
@@ -416,7 +442,13 @@ class _Collector:
 #: repo it is measuring.
 _NODE_SCRIPTS: dict[str, tuple[str, ...]] = {
     "lint": ("lint",),
-    "format": ("format:check", "fmt:check", "format-check", "check-format", "prettier:check"),
+    "format": (
+        "format:check",
+        "fmt:check",
+        "format-check",
+        "check-format",
+        "prettier:check",
+    ),
     "typecheck": ("typecheck", "type-check", "types", "tsc"),
     "test": ("test",),
     "build": ("build",),
@@ -508,7 +540,8 @@ def _first_existing(repo: Repo, names: Sequence[str]) -> str | None:
 def _detect_node(repo: Repo) -> list[_Candidate]:
     out = _Collector(NODE)
     pkg = _package_json(repo)
-    scripts = pkg.get("scripts") if isinstance(pkg.get("scripts"), dict) else {}
+    raw_scripts = pkg.get("scripts")
+    scripts: dict[str, Any] = raw_scripts if isinstance(raw_scripts, dict) else {}
     manager, manager_evidence = _package_manager(repo, pkg)
 
     # The repo's own scripts win: they encode flags (--max-warnings 0, project
@@ -549,20 +582,47 @@ def _detect_node(repo: Repo) -> list[_Candidate]:
         out.add(kind, tool, command, evidence=evidence, rank=rank, preference=1)
 
     direct("lint", "eslint", ("eslint", "."), _ESLINT_CONFIGS, "eslintConfig")
-    direct("format", "prettier", ("prettier", "--check", "."), _PRETTIER_CONFIGS, "prettier")
+    direct(
+        "format",
+        "prettier",
+        ("prettier", "--check", "."),
+        _PRETTIER_CONFIGS,
+        "prettier",
+    )
     # --noEmit is not optional: plain `tsc` writes .js files next to the sources,
     # which would leave the repo dirty after a verification run.
-    direct("typecheck", "tsc", ("tsc", "--noEmit"), ("tsconfig.json",), dep_name="typescript")
+    direct(
+        "typecheck",
+        "tsc",
+        ("tsc", "--noEmit"),
+        ("tsconfig.json",),
+        dep_name="typescript",
+    )
     # `vitest` alone watches; `vitest run` exits.
-    direct("test", "vitest", ("vitest", "run"), ("vitest.config.ts", "vitest.config.js"))
-    direct("test", "jest", ("jest",), ("jest.config.js", "jest.config.ts", "jest.config.cjs"), "jest")
-    direct("test", "mocha", ("mocha",), (".mocharc.json", ".mocharc.yml", ".mocharc.js"))
+    direct(
+        "test", "vitest", ("vitest", "run"), ("vitest.config.ts", "vitest.config.js")
+    )
+    direct(
+        "test",
+        "jest",
+        ("jest",),
+        ("jest.config.js", "jest.config.ts", "jest.config.cjs"),
+        "jest",
+    )
+    direct(
+        "test", "mocha", ("mocha",), (".mocharc.json", ".mocharc.yml", ".mocharc.js")
+    )
     return out.found
 
 
 # ── go ────────────────────────────────────────────────────────────────────
 
-_GOLANGCI_CONFIGS = (".golangci.yml", ".golangci.yaml", ".golangci.toml", ".golangci.json")
+_GOLANGCI_CONFIGS = (
+    ".golangci.yml",
+    ".golangci.yaml",
+    ".golangci.toml",
+    ".golangci.json",
+)
 
 
 def _is_go_repo(repo: Repo) -> bool:
@@ -595,7 +655,12 @@ def _is_rust_repo(repo: Repo) -> bool:
 def _detect_rust(repo: Repo) -> list[_Candidate]:
     out = _Collector(RUST)
     out.add("test", "cargo-test", ("cargo", "test"), evidence="Cargo.toml")
-    out.add("typecheck", "cargo-check", ("cargo", "check", "--all-targets"), evidence="Cargo.toml")
+    out.add(
+        "typecheck",
+        "cargo-check",
+        ("cargo", "check", "--all-targets"),
+        evidence="Cargo.toml",
+    )
     # rustfmt ships with the default toolchain and `--check` is a real exit code.
     out.add("format", "cargo-fmt", ("cargo", "fmt", "--check"), evidence="Cargo.toml")
     out.add("build", "cargo-build", ("cargo", "build"), evidence="Cargo.toml")
@@ -662,7 +727,9 @@ def _detect_make(repo: Repo) -> list[_Candidate]:
 
 
 #: (ecosystem name, applies?, detector). Order sets the order ecosystems appear
-DETECTORS: tuple[tuple[str, Callable[[Repo], bool], Callable[[Repo], list[_Candidate]]], ...] = (
+DETECTORS: tuple[
+    tuple[str, Callable[[Repo], bool], Callable[[Repo], list[_Candidate]]], ...
+] = (
     (PYTHON, _is_python_repo, _detect_python),
     (NODE, _is_node_repo, _detect_node),
     (GO, _is_go_repo, _detect_go),
@@ -718,7 +785,9 @@ def detect_checks(
     overrides: dict[str, tuple[str, ...] | None] | None = None,
 ) -> tuple[Check, ...]:
     """Checks this repo could run, best candidate per kind first."""
-    return tuple(c.check for c in detect_candidates(root, kinds=kinds, overrides=overrides))
+    return tuple(
+        c.check for c in detect_candidates(root, kinds=kinds, overrides=overrides)
+    )
 
 
 def load_overrides(
@@ -741,7 +810,9 @@ def load_overrides(
     except ValueError as exc:
         return {}, (f"ignored {OVERRIDES_PATH}: not valid JSON ({exc})",)
     if not isinstance(data, dict):
-        return {}, (f"ignored {OVERRIDES_PATH}: expected a JSON object at the top level",)
+        return {}, (
+            f"ignored {OVERRIDES_PATH}: expected a JSON object at the top level",
+        )
 
     raw = data.get("checks")
     if raw is None:
@@ -821,5 +892,7 @@ def _drop_redundant_make(candidates: Sequence[_Candidate]) -> list[_Candidate]:
     """
     covered = {c.check.kind for c in candidates if c.check.ecosystem != MAKE}
     return [
-        c for c in candidates if c.check.ecosystem != MAKE or c.check.kind not in covered
+        c
+        for c in candidates
+        if c.check.ecosystem != MAKE or c.check.kind not in covered
     ]

@@ -25,7 +25,9 @@ def write(path, text=""):
 
 
 def overrides(tmp_path, checks):
-    return write(tmp_path / ".tars" / "verification.json", json.dumps({"checks": checks}))
+    return write(
+        tmp_path / ".tars" / "verification.json", json.dumps({"checks": checks})
+    )
 
 
 def run(*argv):
@@ -92,7 +94,10 @@ def noisy_script(tmp_path):
     Necessary so that "is the output body shown?" can't be answered by the
     command string that's echoed in the status row.
     """
-    script = write(tmp_path / "noisy.sh", "#!/bin/sh\necho FIRST_BODY_LINE\necho LAST_BODY_LINE\nexit 1\n")
+    script = write(
+        tmp_path / "noisy.sh",
+        "#!/bin/sh\necho FIRST_BODY_LINE\necho LAST_BODY_LINE\nexit 1\n",
+    )
     script.chmod(0o755)
     overrides(tmp_path, {"test": "sh noisy.sh"})
 
@@ -173,7 +178,7 @@ def test_json_output_is_a_single_parseable_object(tmp_path):
     code, out, _ = run(str(tmp_path), "--json")
     payload = json.loads(out)
     assert payload["verdict"] == "pass"
-    assert payload["exit_code"] == 0
+    assert payload["exit_code"] == code == 0
     assert payload["results"][0]["status"] == "passed"
 
 
@@ -250,6 +255,7 @@ def test_the_module_is_executable_as_a_standalone_command(tmp_path):
         capture_output=True,
         text=True,
         timeout=60,
+        check=False,
     )
     assert proc.returncode == 0, proc.stderr
     assert json.loads(proc.stdout)["verdict"] == "pass"
@@ -261,6 +267,7 @@ def test_help_works_as_a_standalone_command():
         capture_output=True,
         text=True,
         timeout=60,
+        check=False,
     )
     assert proc.returncode == 0
     assert "--only" in proc.stdout

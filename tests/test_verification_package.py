@@ -28,19 +28,19 @@ def test_every_exported_name_actually_resolves():
     assert missing == []
 
 
-def test_dunder_all_is_sorted():
-    # Matches tars.providers, and keeps diffs on this list readable.
-    assert list(pkg.__all__) == sorted(pkg.__all__)
+def test_dunder_all_has_no_duplicates():
+    # Ordering is ruff's job (RUF022); this only guards against a name landing
+    # in the list twice during a merge.
+    assert len(pkg.__all__) == len(set(pkg.__all__))
 
 
 def test_importing_the_gate_does_not_import_the_provider_layer():
+    probe = (
+        "import sys, tars.verification; "
+        "print(any(m.startswith('tars.providers') for m in sys.modules))"
+    )
     proc = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            "import sys, tars.verification; "
-            "print(any(m.startswith('tars.providers') for m in sys.modules))",
-        ],
+        [sys.executable, "-c", probe],
         capture_output=True,
         text=True,
         timeout=60,

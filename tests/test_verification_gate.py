@@ -31,7 +31,9 @@ def fake_tool(root, name, body="#!/bin/sh\nexit 0\n"):
 
 
 def overrides(tmp_path, checks):
-    return write(tmp_path / ".tars" / "verification.json", json.dumps({"checks": checks}))
+    return write(
+        tmp_path / ".tars" / "verification.json", json.dumps({"checks": checks})
+    )
 
 
 #: An empty PATH makes availability tests hermetic: only tools the fixture puts
@@ -130,7 +132,7 @@ def test_fail_fast_skips_the_remaining_checks(tmp_path):
     statuses = {r.check.kind: r.status for r in report.results}
     assert statuses == {"lint": "failed", "test": "skipped"}
     assert not marker.exists()
-    skipped = [r for r in report.results if r.status == "skipped"][0]
+    skipped = next(r for r in report.results if r.status == "skipped")
     assert "fail-fast" in (skipped.detail or "")
 
 
@@ -163,7 +165,12 @@ def test_callbacks_fire_around_each_check(tmp_path):
         on_start=lambda check: events.append(("start", check.kind)),
         on_result=lambda result: events.append(("done", result.check.kind)),
     )
-    assert events == [("start", "lint"), ("done", "lint"), ("start", "test"), ("done", "test")]
+    assert events == [
+        ("start", "lint"),
+        ("done", "lint"),
+        ("start", "test"),
+        ("done", "test"),
+    ]
 
 
 def test_timeouts_are_reported_not_raised(tmp_path):

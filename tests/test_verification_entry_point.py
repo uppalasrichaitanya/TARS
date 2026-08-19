@@ -9,9 +9,11 @@ import importlib
 
 import pytest
 
-tomllib = pytest.importorskip("tomllib", reason="tomllib is 3.11+; the check needs a TOML parser")
+tomllib = pytest.importorskip(
+    "tomllib", reason="tomllib is 3.11+; the check needs a TOML parser"
+)
 
-from pathlib import Path  # noqa: E402  (after the importorskip guard, deliberately)
+from pathlib import Path
 
 PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
 

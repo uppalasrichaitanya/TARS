@@ -22,8 +22,9 @@ import shutil
 import subprocess
 import sys
 import time
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Mapping, Sequence
+from typing import Any
 
 from .types import Check, CheckResult
 
@@ -189,7 +190,9 @@ def _spawn(
     root: Path,
     env: Mapping[str, str],
 ) -> subprocess.Popen[str]:
-    kwargs: dict[str, object] = {}
+    # dict[str, Any] rather than dict[str, object]: Popen is an overloaded stub,
+    # and object-valued kwargs match none of the overloads.
+    kwargs: dict[str, Any] = {}
     if hasattr(os, "setsid"):
         # New session => the child leads its own process group, so a timeout can
         # take out the whole tree in one signal.
@@ -197,7 +200,7 @@ def _spawn(
     elif hasattr(subprocess, "CREATE_NEW_PROCESS_GROUP"):  # pragma: no cover - Windows
         kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
 
-    return subprocess.Popen(  # noqa: S603 - argv is a resolved path + fixed args
+    return subprocess.Popen(
         list(argv),
         cwd=str(root),
         env=dict(env),
@@ -207,7 +210,7 @@ def _spawn(
         # Tools emit whatever their locale gives them; a stray byte in a test
         # name must not turn into a gate crash.
         errors="replace",
-        **kwargs,  # type: ignore[arg-type]
+        **kwargs,
     )
 
 

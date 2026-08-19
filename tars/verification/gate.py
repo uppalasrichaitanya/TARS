@@ -10,8 +10,8 @@ check surface without telling anyone, which is the same lie as reporting a pass.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import Callable, Iterable, Mapping, Sequence
 
 from .detect import OVERRIDES_PATH, detect_candidates, load_overrides
 from .runner import DEFAULT_TIMEOUT_S, build_child_env, resolve_executable, run_check
@@ -76,13 +76,17 @@ def verify(
     root_path = Path(root).resolve()
     kinds = tuple(kinds)
     overrides, notes = load_overrides(root_path)
-    selected, rejected = select_checks(root_path, kinds=kinds, env=env, overrides=overrides)
+    selected, rejected = select_checks(
+        root_path, kinds=kinds, env=env, overrides=overrides
+    )
 
     if not selected:
         notes = (
             *notes,
-            f"no checks detected in {root_path} for kinds: {', '.join(kinds) or '(none)'}"
-            f" — add {OVERRIDES_PATH} to declare this repo's check surface",
+            (
+                f"no checks detected in {root_path} for kinds: {', '.join(kinds) or '(none)'}"
+                f" — add {OVERRIDES_PATH} to declare this repo's check surface"
+            ),
         )
 
     started = time.monotonic()

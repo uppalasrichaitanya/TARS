@@ -24,12 +24,12 @@ def make_check(kind="test", tool="pytest", command=("pytest",)):
 
 
 def make_result(status="passed", check=None, **kw):
-    defaults = dict(
-        exit_code=0 if status == "passed" else 1,
-        duration_s=0.5,
-        stdout="",
-        stderr="",
-    )
+    defaults = {
+        "exit_code": 0 if status == "passed" else 1,
+        "duration_s": 0.5,
+        "stdout": "",
+        "stderr": "",
+    }
     defaults.update(kw)
     return CheckResult(check=check or make_check(), status=status, **defaults)
 

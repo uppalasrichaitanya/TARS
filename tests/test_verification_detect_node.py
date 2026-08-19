@@ -77,12 +77,16 @@ def test_lint_and_typecheck_scripts_are_detected(tmp_path):
 
 def test_hyphenated_type_check_script_is_detected(tmp_path):
     package_json(tmp_path, scripts={"type-check": "tsc --noEmit"})
-    assert commands(detect_checks(tmp_path), "typecheck") == [("npm", "run", "type-check")]
+    assert commands(detect_checks(tmp_path), "typecheck") == [
+        ("npm", "run", "type-check")
+    ]
 
 
 def test_a_check_shaped_format_script_is_used(tmp_path):
     package_json(tmp_path, scripts={"format:check": "prettier --check ."})
-    assert commands(detect_checks(tmp_path), "format") == [("npm", "run", "format:check")]
+    assert commands(detect_checks(tmp_path), "format") == [
+        ("npm", "run", "format:check")
+    ]
 
 
 def test_a_rewriting_format_script_is_never_used(tmp_path):
@@ -122,7 +126,10 @@ def test_a_script_outranks_a_direct_binary_for_the_same_kind(tmp_path):
     # The repo's own script encodes flags the gate shouldn't have to guess.
     package_json(tmp_path, scripts={"lint": "eslint . --max-warnings 0"})
     write(tmp_path / "eslint.config.js", "export default []\n")
-    assert commands(detect_checks(tmp_path), "lint") == [("npm", "run", "lint"), ("eslint", ".")]
+    assert commands(detect_checks(tmp_path), "lint") == [
+        ("npm", "run", "lint"),
+        ("eslint", "."),
+    ]
 
 
 def test_vitest_dependency_without_a_script_runs_once_not_in_watch_mode(tmp_path):

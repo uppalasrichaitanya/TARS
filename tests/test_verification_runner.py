@@ -116,7 +116,7 @@ def test_records_the_resolved_command_so_a_human_can_reproduce_it(tmp_path):
 def test_child_env_disables_watch_modes_and_color(tmp_path):
     # Bare `vitest`/`jest` in a repo script would sit in watch mode forever and
     # blow the timeout; CI=1 is what makes them run once and exit.
-    script = "printf 'CI=%s NO_COLOR=%s' \"$CI\" \"$NO_COLOR\""
+    script = 'printf \'CI=%s NO_COLOR=%s\' "$CI" "$NO_COLOR"'
     result = run_check(make_check(["sh", "-c", script]), tmp_path)
     assert result.stdout == "CI=1 NO_COLOR=1"
 
@@ -124,7 +124,9 @@ def test_child_env_disables_watch_modes_and_color(tmp_path):
 def test_child_inherits_the_parent_environment(tmp_path):
     os.environ["TARS_RUNNER_PROBE"] = "inherited"
     try:
-        result = run_check(make_check(["sh", "-c", 'echo "$TARS_RUNNER_PROBE"']), tmp_path)
+        result = run_check(
+            make_check(["sh", "-c", 'echo "$TARS_RUNNER_PROBE"']), tmp_path
+        )
     finally:
         del os.environ["TARS_RUNNER_PROBE"]
     assert "inherited" in result.stdout

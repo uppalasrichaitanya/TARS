@@ -21,13 +21,14 @@ import argparse
 import json
 import os
 import sys
+from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import Iterable, Sequence, TextIO
+from typing import TextIO
 
 from .detect import detect_candidates
 from .gate import select_checks, verify
 from .runner import DEFAULT_TIMEOUT_S, build_child_env, resolve_executable
-from .types import ALL_KINDS, DEFAULT_KINDS, Check, CheckResult, GateReport, VALID_KINDS
+from .types import ALL_KINDS, DEFAULT_KINDS, VALID_KINDS, Check, CheckResult, GateReport
 
 EXIT_PASS = 0
 EXIT_FAIL = 1
@@ -106,7 +107,9 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="show what would run, and why, without running anything",
     )
-    parser.add_argument("--json", action="store_true", help="emit one JSON object instead of text")
+    parser.add_argument(
+        "--json", action="store_true", help="emit one JSON object instead of text"
+    )
     parser.add_argument(
         "--fail-fast",
         action="store_true",
@@ -138,7 +141,9 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="exit 0 instead of 3 when nothing could be verified",
     )
-    parser.add_argument("--quiet", "-q", action="store_true", help="print only the verdict line")
+    parser.add_argument(
+        "--quiet", "-q", action="store_true", help="print only the verdict line"
+    )
     parser.add_argument("--no-color", action="store_true", help="disable ANSI color")
     return parser
 
@@ -216,7 +221,9 @@ def _run_gate(
     return code
 
 
-def _run_list(args: argparse.Namespace, kinds: tuple[str, ...], printer: _Printer) -> int:
+def _run_list(
+    args: argparse.Namespace, kinds: tuple[str, ...], printer: _Printer
+) -> int:
     root = Path(args.path)
     candidates = detect_candidates(root, kinds=kinds)
     selected, _ = select_checks(root, kinds=kinds)
@@ -226,7 +233,11 @@ def _run_list(args: argparse.Namespace, kinds: tuple[str, ...], printer: _Printe
         for check in (c.check for c in candidates)
     }
 
-    code = EXIT_PASS if candidates else (EXIT_PASS if args.allow_no_checks else EXIT_NO_CHECKS)
+    code = (
+        EXIT_PASS
+        if candidates
+        else (EXIT_PASS if args.allow_no_checks else EXIT_NO_CHECKS)
+    )
 
     if args.json:
         printer.raw(
@@ -274,7 +285,9 @@ def _exit_code(report: GateReport, *, allow_no_checks: bool) -> int:
     return EXIT_PASS
 
 
-def _resolve_kinds(only: list[str] | None, include: list[str] | None) -> tuple[str, ...]:
+def _resolve_kinds(
+    only: list[str] | None, include: list[str] | None
+) -> tuple[str, ...]:
     base = _split_kinds(only) if only else set(DEFAULT_KINDS)
     if include:
         base |= _split_kinds(include)
@@ -383,7 +396,9 @@ class _Printer:
         )
 
     # ── report sections ──
-    def details(self, report: GateReport, *, output_lines: int, kinds: Sequence[str]) -> None:
+    def details(
+        self, report: GateReport, *, output_lines: int, kinds: Sequence[str]
+    ) -> None:
         self.header(report.root)
         for result in report.results:
             # Rows for checks that ran were already streamed by the callbacks;

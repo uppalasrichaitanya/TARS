@@ -66,7 +66,9 @@ def test_a_missing_root_is_an_error_not_an_empty_result(tmp_path):
 
 
 def test_pytest_section_in_pyproject_detects_pytest(tmp_path):
-    write(tmp_path / "pyproject.toml", "[tool.pytest.ini_options]\ntestpaths=['tests']\n")
+    write(
+        tmp_path / "pyproject.toml", "[tool.pytest.ini_options]\ntestpaths=['tests']\n"
+    )
     check = kinds_of(detect_checks(tmp_path), "test")[0]
     assert check.tool == "pytest"
     assert check.command == ("pytest",)
@@ -96,8 +98,17 @@ def test_a_tests_directory_alone_proposes_pytest_then_unittest(tmp_path):
 def test_unittest_fallback_targets_the_tests_directory(tmp_path):
     write(tmp_path / "pyproject.toml", "[project]\nname='x'\n")
     write(tmp_path / "tests" / "test_thing.py", "def test_x(): pass\n")
-    unittest = [c for c in detect_checks(tmp_path) if c.tool == "unittest"][0]
-    assert unittest.command == ("python", "-m", "unittest", "discover", "-s", "tests", "-t", ".")
+    unittest = next(c for c in detect_checks(tmp_path) if c.tool == "unittest")
+    assert unittest.command == (
+        "python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-t",
+        ".",
+    )
 
 
 def test_a_python_repo_with_no_tests_gets_no_test_check(tmp_path):
@@ -225,7 +236,10 @@ def test_kinds_filter_narrows_detection(tmp_path):
 
 
 def test_checks_come_back_cheapest_signal_first(tmp_path):
-    write(tmp_path / "pyproject.toml", "[tool.ruff]\n[tool.mypy]\n[tool.pytest.ini_options]\n")
+    write(
+        tmp_path / "pyproject.toml",
+        "[tool.ruff]\n[tool.mypy]\n[tool.pytest.ini_options]\n",
+    )
     assert [c.kind for c in detect_checks(tmp_path)] == [
         "lint",
         "format",

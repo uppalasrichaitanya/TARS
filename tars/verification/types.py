@@ -14,8 +14,9 @@ directive exists to prevent.
 from __future__ import annotations
 
 import shlex
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Literal, Sequence
+from typing import Any, Literal
 
 #: What a check is checking. `format` is always run in check-only mode, never
 #: as a rewrite. `build` writes artifacts, so it's opt-in (see DEFAULT_KINDS).

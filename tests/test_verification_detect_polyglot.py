@@ -90,7 +90,9 @@ def test_clippy_needs_config_evidence(tmp_path):
 
 
 def test_cargo_lints_section_is_clippy_evidence(tmp_path):
-    write(tmp_path / "Cargo.toml", "[package]\nname='x'\n\n[lints.clippy]\nall='deny'\n")
+    write(
+        tmp_path / "Cargo.toml", "[package]\nname='x'\n\n[lints.clippy]\nall='deny'\n"
+    )
     assert commands(detect_checks(tmp_path), "lint") == [
         ("cargo", "clippy", "--all-targets", "--", "-D", "warnings")
     ]
