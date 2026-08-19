@@ -1,6 +1,6 @@
 """Go, Rust, and the Makefile fallback.
 
-Two deliberate omissions are pinned here as tests, because they look like gaps
+Three deliberate omissions are pinned here as tests, because they look like gaps
 until you know why:
 
 - No Go format check. `gofmt -l .` lists unformatted files and still exits 0, so
@@ -9,6 +9,8 @@ until you know why:
 - Clippy only with config evidence. `cargo clippy` on a toolchain without the
   component exits non-zero, which the gate would report as a lint *failure*
   rather than a missing tool.
+- No pre-commit. Its hooks routinely rewrite the files they inspect, and the
+  gate must not mutate the tree it's checking.
 """
 
 from tars.verification.detect import detect_checks, detect_ecosystems
@@ -148,3 +150,12 @@ def test_lowercase_makefile_is_recognized(tmp_path):
 def test_a_makefile_with_no_known_targets_yields_nothing(tmp_path):
     write(tmp_path / "Makefile", "deploy:\n\t./ship.sh\n")
     assert detect_checks(tmp_path) == ()
+
+
+def test_pre_commit_config_is_not_turned_into_a_check(tmp_path):
+    # Real case: a repo whose only check-shaped file is .pre-commit-config.yaml.
+    # Running `pre-commit run --all-files` would rewrite files (black,
+    # end-of-file-fixer, …), and the gate never mutates the tree it checks.
+    write(tmp_path / ".pre-commit-config.yaml", "repos:\n- repo: local\n")
+    write(tmp_path / "pyproject.toml", "[project]\nname='x'\n")
+    assert for_kind(detect_checks(tmp_path), "lint") == []

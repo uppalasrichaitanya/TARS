@@ -17,6 +17,17 @@ Three rules shape everything here:
    one that's installed. Ordering is by evidence strength first, then by tool
    preference — a repo with a .flake8 file and an incidental ruff in its venv
    means flake8.
+
+Three tools a reader will notice are missing, omitted on purpose:
+
+* ``gofmt -l .`` — exits 0 even when it lists unformatted files, so a check
+  built on it can never fail. A permanent false pass is worse than no check.
+* ``clippy`` without config evidence — a repo that has never configured clippy
+  usually hasn't installed the component either, and `cargo clippy` then fails
+  in a way that reads as a lint failure rather than a missing tool.
+* ``pre-commit`` — many hooks (black, trailing-whitespace, end-of-file-fixer)
+  rewrite files as they run. The gate must never mutate the tree it's checking,
+  and there's no general way to tell a fixing hook from a checking one.
 """
 
 from __future__ import annotations
