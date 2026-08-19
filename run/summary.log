@@ -6,3 +6,61 @@
             to decide. This phase isolated its work in worktree /home/chaitanya/TARS-provider-adapter
             (branch phase/provider-adapter) and will merge to master at the end. Check for stray
             files/commits from 5060 before trusting the main tree.
+
+[03:18:33] ── provider-adapter phase COMPLETE (pid 5194) ──
+            TWO INDEPENDENT IMPLEMENTATIONS NOW EXIST. Nothing was overwritten.
+            You need to pick one before the later phases build on it.
+
+            (A) master — built by the ORPHAN agent (pid 5060), commits e1d4b1c..edff6a7
+                124 tests pass. OpenRouter via stdlib urllib (zero runtime deps;
+                SDKs are optional extras). Declared check surface: pytest only.
+                Not clean under ruff (14) or mypy (1, an Optional-narrowing
+                warning on unreachable code — not a live bug).
+
+            (B) branch phase/provider-adapter — built by THIS run (pid 5194),
+                worktree /home/chaitanya/TARS-provider-adapter, commits 8e20d16..145a6eb
+                216 tests pass, ruff clean, ruff format clean, mypy clean,
+                sdist+wheel build. OpenRouter via httpx. Written test-first with
+                a verified failing test before each module.
+
+            Both implement the spec: unified generate(messages, tools, model),
+            Anthropic + OpenAI direct SDKs, OpenRouter over HTTP for the rest.
+            Real difference is httpx vs stdlib, and breadth of verification.
+
+            To adopt (B):  git checkout master && git merge -X theirs phase/provider-adapter
+                           (expect conflicts on every tars/providers/* path — they are
+                            parallel rewrites, so resolve by taking one side wholesale)
+            To keep (A):   git branch -D phase/provider-adapter
+                           git worktree remove /home/chaitanya/TARS-provider-adapter
+
+            LEFT UNDONE DELIBERATELY: I did not merge to master. Overwriting
+            another agent's committed work unattended isn't my call, and leaving
+            master alone loses nothing — both trees are on disk. The cost of
+            that choice: later phases tonight will build on (A), so (B) goes
+            stale if you prefer it.
+
+=== 03:42 UPDATE (pid 5194) — live verification + credential fix ===
+Found via the other agent's memory note, then confirmed directly: this machine
+has ANTHROPIC_AUTH_TOKEN + ANTHROPIC_BASE_URL (agentrouter proxy) set, and no
+ANTHROPIC_API_KEY / OPENAI_API_KEY / OPENROUTER_API_KEY.
+
+My adapter (B) demanded ANTHROPIC_API_KEY and refused to start here. Fixed on
+branch phase/provider-adapter, commit 135b2d2, TDD (watched RED first):
+  - precedence: explicit arg > ANTHROPIC_API_KEY > ANTHROPIC_AUTH_TOKEN
+  - ANTHROPIC_BASE_URL honoured; falls through to the SDK default when unset
+  - also closed a test hole: the missing-credentials test cleared only
+    ANTHROPIC_API_KEY, so an AUTH_TOKEN in your shell made it pass wrongly
+
+LIVE end-to-end PASS through the proxy on claude-opus-5 (3 turns):
+  plain text -> "PONG"
+  tool call  -> get_weather {'city': 'Paris'}, id toolu_bdrk_012mNWRLz...
+  result fed back -> model answered using the tool output
+This is the first live verification of either implementation's tool round trip.
+
+Final surface on (B): 223 tests pass, ruff clean, ruff format clean, mypy clean,
+sdist+wheel build, live smoke pass.
+
+STILL NEEDS YOUR DECISION: (A) master vs (B) phase/provider-adapter. Unchanged
+from the 03:18 block. Note (A) already handles the auth-token case; that was
+never the differentiator between them.
+[03:27:15] Phase 'provider-adapter' finished. Committing checkpoint.

@@ -1,0 +1,30 @@
+## PHASE 7 — REPORT
+
+**Provider-adapter phase: PASS**, on branch `phase/provider-adapter` (worktree `/home/chaitanya/TARS-provider-adapter`), 8 commits.
+
+**Verification — all green, just re-run on the committed tree:**
+
+| Check | Result |
+|---|---|
+| `pytest` | **223 passed** |
+| `ruff check` | all checks passed |
+| `ruff format --check` | 23 files already formatted |
+| `mypy` | no issues in 12 source files |
+| `python -m build` | sdist + wheel built |
+| **live end-to-end** | **PASS** — 3 turns on `claude-opus-5` |
+
+**What's built:** `generate(messages, tools, model)` over one normalized type vocabulary (`Message`/`ToolDef`/`Response`), Anthropic and OpenAI on their direct SDKs, everything else over OpenRouter HTTP. Model routing resolves `claude-*`→anthropic, `gpt-*`→openai, anything slashed or unknown→openrouter, with `provider:model` as an explicit override. One error taxonomy where the only thing the loop acts on is `retryable`; retries centralized in one place with SDK-internal retries switched off so backoff isn't doubled.
+
+**Two things worth your attention:**
+
+**1. I fixed a real defect I'd otherwise have reported as done.** Your credentials here are `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_BASE_URL` (agentrouter proxy) — there is no `ANTHROPIC_API_KEY`, and no OpenAI or OpenRouter key at all. My adapter demanded `ANTHROPIC_API_KEY` and refused to start on this machine. Fixed in `135b2d2` via TDD (watched RED first). That unblocked the live test above: plain text → `PONG`, then a real tool call `get_weather {'city': 'Paris'}` (id `toolu_bdrk_012mNWRLz...`, confirming the Bedrock proxy), then the result fed back and used in the answer. The same change closed a test hole — the missing-credentials test cleared only `ANTHROPIC_API_KEY`, so an auth token in your shell would have made it pass for the wrong reason.
+
+Honest scoping: **only the Anthropic path is live-verified.** OpenAI and OpenRouter are unit-verified only, because no keys exist for them. I'm not claiming otherwise.
+
+**2. The headline still needs a human decision: there are two complete provider layers.** `overnight_build.sh` was launched twice ~35s apart; the first launcher died but its `claude` child (pid 5060) kept running, so two agents built this phase concurrently in the same tree. That orphan committed its own full implementation to `master` (stdlib `urllib`, zero runtime deps, 124 tests). Mine is on the branch (`httpx`, 223 tests, clean under lint/type/build, live-verified).
+
+I did not merge or overwrite `master` — burying another agent's committed work unattended isn't my call, and both trees survive on disk so nothing is lost by waiting. The cost of that choice: later phases tonight will build on whatever `master` holds, so my branch goes stale if you prefer it. They're parallel rewrites of the same file paths, so resolve by taking one side wholesale, never hunk-by-hunk. Worth knowing: `master` already handled the auth-token case, so that was never the differentiator between them.
+
+**Memory:** wrote two entries and corrected one. New: the double-launch hazard (`overnight_build.sh` takes no lock), and the unresolved two-implementation fork. Corrected: the other agent's credentials note asserted "adapters take an injected `env`" as a general rule — true of `master`, not of my branch, so I made it accurate for both and kept the machine-level facts, which I verified independently rather than taking on trust. I deliberately did *not* save the routing rules or the `max_retries=0` decision — those are already documented in the code they govern.
+
+Fixing `overnight_build.sh` to take a lock is the obvious follow-up, but it's outside this phase, so I left it alone.
