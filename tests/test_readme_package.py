@@ -107,3 +107,22 @@ def test_this_packages_own_docstring_examples_survive_its_own_extractor():
     assert own, "the package docstring should carry usage examples"
     for example in own:
         assert example.verified, f"{example.location}: {example.verification}"
+
+
+def test_every_example_mined_from_this_repo_appears_verbatim_in_its_source():
+    # `path:line` under a snippet is a promise a reader can check by opening the
+    # file, and it is only worth anything if the snippet is a copy. Dedenting is
+    # the one allowed edit. Anything else — normalising whitespace, aligning
+    # comments, running a formatter over the block — makes the citation a
+    # paraphrase, and there is no way for a reader to tell which.
+    facts = pkg.inspect_project(ROOT, max_examples=1000)
+    for example in facts.examples:
+        if example.kind == "doctest":  # `>>> ` prefixes are stripped, by design
+            continue
+        source = (ROOT / example.path).read_text(encoding="utf-8")
+        for original in example.code.strip().splitlines():
+            if not original.strip():
+                continue
+            assert original.strip() in source, (
+                f"{example.location}: {original.strip()!r} is not in {example.path}"
+            )
