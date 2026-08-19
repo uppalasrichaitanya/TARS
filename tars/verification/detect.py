@@ -23,17 +23,27 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterable, Sequence
 
-from .types import ALL_KINDS, Check, CheckKind
+from .types import ALL_KINDS, VALID_KINDS, Check, CheckKind
 
 PYTHON = "python"
 NODE = "node"
 GO = "go"
 RUST = "rust"
 MAKE = "make"
+OVERRIDE = "override"
+
+#: A repo can declare its own check surface here when detection can't know
+#: better — a bespoke test harness, a linter behind a wrapper script, or a
+#: check that must simply be turned off. JSON rather than TOML so it parses on
+#: every supported Python without a dependency.
+#:
+#:     {"checks": {"test": "make integration", "lint": null}}
+OVERRIDES_PATH = ".tars/verification.json"
 
 #: Evidence strength. Lower is stronger; it's the primary sort key, so a
 #: configured tool always outranks one that merely happens to be installed.
@@ -672,17 +682,21 @@ def detect_candidates(
     root: Path | str,
     *,
     kinds: Iterable[str] | None = None,
+    overrides: dict[str, tuple[str, ...] | None] | None = None,
 ) -> tuple[_Candidate, ...]:
     """Every check candidate, sorted by kind, then evidence, then preference."""
     repo = Repo(root)
     _require_dir(repo.root)
     wanted = set(kinds) if kinds is not None else set(ALL_KINDS)
+    if overrides is None:
+        overrides, _ = load_overrides(repo.root)
 
     candidates: list[_Candidate] = []
     for _, applies, detector in DETECTORS:
         if applies(repo):
             candidates.extend(detector(repo))
     candidates = _drop_redundant_make(candidates)
+    candidates = _apply_overrides(candidates, overrides)
 
     kind_order = {kind: i for i, kind in enumerate(ALL_KINDS)}
     selected = [c for c in candidates if c.check.kind in wanted]
@@ -701,9 +715,95 @@ def detect_checks(
     root: Path | str,
     *,
     kinds: Iterable[str] | None = None,
+    overrides: dict[str, tuple[str, ...] | None] | None = None,
 ) -> tuple[Check, ...]:
     """Checks this repo could run, best candidate per kind first."""
-    return tuple(c.check for c in detect_candidates(root, kinds=kinds))
+    return tuple(c.check for c in detect_candidates(root, kinds=kinds, overrides=overrides))
+
+
+def load_overrides(
+    root: Path | str,
+) -> tuple[dict[str, tuple[str, ...] | None], tuple[str, ...]]:
+    """Read `.tars/verification.json`, returning (overrides, notes).
+
+    Never raises: a broken override file degrades to detection plus a note, so
+    one bad edit can't take the gate offline. A value of `null` means "this kind
+    is deliberately disabled here", which is different from "not detected" and
+    is worth being able to say.
+    """
+    repo = Repo(root)
+    text = repo.read(OVERRIDES_PATH)
+    if text is None:
+        return {}, ()
+
+    try:
+        data = json.loads(text)
+    except ValueError as exc:
+        return {}, (f"ignored {OVERRIDES_PATH}: not valid JSON ({exc})",)
+    if not isinstance(data, dict):
+        return {}, (f"ignored {OVERRIDES_PATH}: expected a JSON object at the top level",)
+
+    raw = data.get("checks")
+    if raw is None:
+        return {}, (f"ignored {OVERRIDES_PATH}: no 'checks' object",)
+    if not isinstance(raw, dict):
+        return {}, (f"ignored {OVERRIDES_PATH}: 'checks' must be an object",)
+
+    overrides: dict[str, tuple[str, ...] | None] = {}
+    notes: list[str] = []
+    for kind, value in raw.items():
+        if kind not in VALID_KINDS:
+            notes.append(
+                f"ignored unknown kind {kind!r} in {OVERRIDES_PATH} "
+                f"(expected one of {sorted(VALID_KINDS)})"
+            )
+            continue
+        if value is None or value is False:
+            overrides[kind] = None
+            continue
+        if isinstance(value, str):
+            argv = tuple(shlex.split(value))
+        elif isinstance(value, list) and all(isinstance(part, str) for part in value):
+            argv = tuple(value)
+        else:
+            notes.append(
+                f"ignored {OVERRIDES_PATH} checks.{kind}: expected a command string, "
+                "an argv list, or null"
+            )
+            continue
+        if not argv:
+            notes.append(f"ignored {OVERRIDES_PATH} checks.{kind}: empty command")
+            continue
+        overrides[kind] = argv
+    return overrides, tuple(notes)
+
+
+def _apply_overrides(
+    candidates: Sequence[_Candidate],
+    overrides: dict[str, tuple[str, ...] | None],
+) -> list[_Candidate]:
+    """Replace detection for any kind the repo declared itself."""
+    if not overrides:
+        return list(candidates)
+
+    kept = [c for c in candidates if c.check.kind not in overrides]
+    for kind, argv in overrides.items():
+        if argv is None:  # deliberately disabled
+            continue
+        kept.append(
+            _Candidate(
+                rank=_CONFIG,
+                preference=0,
+                check=Check(
+                    kind=kind,  # type: ignore[arg-type]
+                    tool=Path(argv[0]).name,
+                    command=argv,
+                    ecosystem=OVERRIDE,
+                    evidence=f"{OVERRIDES_PATH} checks.{kind}",
+                ),
+            )
+        )
+    return kept
 
 
 def _require_dir(root: Path) -> None:
