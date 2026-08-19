@@ -18,6 +18,11 @@ openai = ["openai>=1.40"]
 providers = ["anthropic>=0.40", "openai>=1.40"]
 dev = ["anthropic>=0.40", "openai>=1.40", "pytest>=8"]
 
+[project.scripts]
+# The verification gate is useful outside the loop entirely, so it ships as a
+# command. `python -m tars.verification` is the same entry point.
+tars-verify = "tars.verification.cli:main"
+
 [tool.setuptools.packages.find]
 include = ["tars*"]
 
