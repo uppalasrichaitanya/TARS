@@ -1,0 +1,8 @@
+[02:53:18] ── Foundation phase: provider-adapter ──
+[02:53:53] ── Foundation phase: provider-adapter ──
+[02:57:45] ⚠️  DUPLICATE AGENT DETECTED: pid 5060 (claude, started 02:53:18) is an ORPHAN from a first
+            launch of overnight_build.sh whose parent died. It is building provider-adapter in
+            /home/chaitanya/TARS concurrently with this run (pid 5194). Not killed — left for you
+            to decide. This phase isolated its work in worktree /home/chaitanya/TARS-provider-adapter
+            (branch phase/provider-adapter) and will merge to master at the end. Check for stray
+            files/commits from 5060 before trusting the main tree.

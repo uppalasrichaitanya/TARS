@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tars"
+version = "0.1.0"
+description = "TARS — a disciplined, multi-session coding agent loop"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+# Direct SDKs are first-class but optional: the adapter layer imports them
+# lazily so `import tars.providers` works with neither installed, and
+# OpenRouter needs no SDK at all (stdlib HTTP).
+anthropic = ["anthropic>=0.40"]
+openai = ["openai>=1.40"]
+providers = ["anthropic>=0.40", "openai>=1.40"]
+dev = ["anthropic>=0.40", "openai>=1.40", "pytest>=8"]
+
+[tool.setuptools.packages.find]
+include = ["tars*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
