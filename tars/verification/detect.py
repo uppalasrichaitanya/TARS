@@ -21,14 +21,19 @@ Three rules shape everything here:
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Iterable, Sequence
+from typing import Any, Callable, Iterable, Sequence
 
 from .types import ALL_KINDS, Check, CheckKind
 
 PYTHON = "python"
+NODE = "node"
+GO = "go"
+RUST = "rust"
+MAKE = "make"
 
 #: Evidence strength. Lower is stronger; it's the primary sort key, so a
 #: configured tool always outranks one that merely happens to be installed.
@@ -362,11 +367,297 @@ def _detect_python(repo: Repo) -> list[_Candidate]:
     return found
 
 
+class _Collector:
+    """Accumulates candidates for one ecosystem."""
+
+    def __init__(self, ecosystem: str) -> None:
+        self.ecosystem = ecosystem
+        self.found: list[_Candidate] = []
+
+    def add(
+        self,
+        kind: CheckKind,
+        tool: str,
+        command: Sequence[str],
+        *,
+        evidence: str,
+        rank: int = _CONFIG,
+        preference: int = 0,
+    ) -> None:
+        self.found.append(
+            _Candidate(
+                rank=rank,
+                preference=preference,
+                check=Check(
+                    kind=kind,
+                    tool=tool,
+                    command=tuple(command),
+                    ecosystem=self.ecosystem,
+                    evidence=evidence,
+                ),
+            )
+        )
+
+
+# ── node / typescript ─────────────────────────────────────────────────────
+
+#: Script names accepted per kind. For `format`, only check-shaped names: a bare
+#: `npm run format` rewrites the working tree, and the gate must not mutate the
+#: repo it is measuring.
+_NODE_SCRIPTS: dict[str, tuple[str, ...]] = {
+    "lint": ("lint",),
+    "format": ("format:check", "fmt:check", "format-check", "check-format", "prettier:check"),
+    "typecheck": ("typecheck", "type-check", "types", "tsc"),
+    "test": ("test",),
+    "build": ("build",),
+}
+
+_PACKAGE_MANAGERS = ("npm", "pnpm", "yarn", "bun")
+
+#: Lockfile -> package manager, most specific first.
+_LOCKFILES = (
+    ("pnpm-lock.yaml", "pnpm"),
+    ("yarn.lock", "yarn"),
+    ("bun.lockb", "bun"),
+    ("bun.lock", "bun"),
+    ("package-lock.json", "npm"),
+    ("npm-shrinkwrap.json", "npm"),
+)
+
+_ESLINT_CONFIGS = (
+    "eslint.config.js",
+    "eslint.config.mjs",
+    "eslint.config.cjs",
+    "eslint.config.ts",
+    ".eslintrc",
+    ".eslintrc.js",
+    ".eslintrc.cjs",
+    ".eslintrc.json",
+    ".eslintrc.yml",
+    ".eslintrc.yaml",
+)
+
+_PRETTIER_CONFIGS = (
+    ".prettierrc",
+    ".prettierrc.json",
+    ".prettierrc.js",
+    ".prettierrc.cjs",
+    ".prettierrc.yml",
+    ".prettierrc.yaml",
+    "prettier.config.js",
+    "prettier.config.mjs",
+    "prettier.config.cjs",
+)
+
+
+def _is_node_repo(repo: Repo) -> bool:
+    return repo.exists("package.json")
+
+
+def _package_json(repo: Repo) -> dict[str, Any]:
+    """package.json as a dict, or empty if it's unparseable.
+
+    A malformed manifest must degrade to "no script signals", not crash the
+    gate — plenty of real repos have a broken package.json on some branch.
+    """
+    text = repo.read("package.json")
+    if not text:
+        return {}
+    try:
+        loaded = json.loads(text)
+    except (ValueError, TypeError):
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
+
+
+def _package_manager(repo: Repo, pkg: dict[str, Any]) -> tuple[str, str]:
+    """Which package manager to invoke, and why."""
+    declared = pkg.get("packageManager")
+    if isinstance(declared, str) and declared:
+        name = declared.split("@", 1)[0].strip()
+        if name in _PACKAGE_MANAGERS:
+            return name, "package.json packageManager"
+    for lockfile, name in _LOCKFILES:
+        if repo.exists(lockfile):
+            return name, lockfile
+    return "npm", "package.json (no lockfile, defaulting to npm)"
+
+
+def _node_declares(pkg: dict[str, Any], name: str) -> str | None:
+    for section in ("devDependencies", "dependencies"):
+        deps = pkg.get(section)
+        if isinstance(deps, dict) and name in deps:
+            return f"package.json {section}.{name}"
+    return None
+
+
+def _first_existing(repo: Repo, names: Sequence[str]) -> str | None:
+    return next((n for n in names if repo.exists(n)), None)
+
+
+def _detect_node(repo: Repo) -> list[_Candidate]:
+    out = _Collector(NODE)
+    pkg = _package_json(repo)
+    scripts = pkg.get("scripts") if isinstance(pkg.get("scripts"), dict) else {}
+    manager, manager_evidence = _package_manager(repo, pkg)
+
+    # The repo's own scripts win: they encode flags (--max-warnings 0, project
+    # globs, reporters) that the gate has no business guessing at.
+    for kind, names in _NODE_SCRIPTS.items():
+        for script in names:
+            if script in scripts:
+                out.add(
+                    kind,  # type: ignore[arg-type]
+                    f"{manager}:{script}",
+                    (manager, "run", script),
+                    evidence=f"package.json scripts.{script} (via {manager_evidence})",
+                    preference=0,
+                )
+                break
+
+    def direct(
+        kind: CheckKind,
+        tool: str,
+        command: Sequence[str],
+        configs: Sequence[str] = (),
+        manifest_key: str | None = None,
+        dep_name: str | None = None,
+    ) -> None:
+        """A tool invoked straight, for repos without a matching script."""
+        dep = dep_name or tool
+        config = _first_existing(repo, configs)
+        if config:
+            rank, evidence = _CONFIG, config
+        elif manifest_key and manifest_key in pkg:
+            rank, evidence = _CONFIG, f"package.json {manifest_key}"
+        elif (declared := _node_declares(pkg, dep)) is not None:
+            rank, evidence = _DECLARED, declared
+        elif (bin_dir := repo.has_local_tool(command[0])) is not None:
+            rank, evidence = _INSTALLED, f"{command[0]} installed in {bin_dir}"
+        else:
+            return
+        out.add(kind, tool, command, evidence=evidence, rank=rank, preference=1)
+
+    direct("lint", "eslint", ("eslint", "."), _ESLINT_CONFIGS, "eslintConfig")
+    direct("format", "prettier", ("prettier", "--check", "."), _PRETTIER_CONFIGS, "prettier")
+    # --noEmit is not optional: plain `tsc` writes .js files next to the sources,
+    # which would leave the repo dirty after a verification run.
+    direct("typecheck", "tsc", ("tsc", "--noEmit"), ("tsconfig.json",), dep_name="typescript")
+    # `vitest` alone watches; `vitest run` exits.
+    direct("test", "vitest", ("vitest", "run"), ("vitest.config.ts", "vitest.config.js"))
+    direct("test", "jest", ("jest",), ("jest.config.js", "jest.config.ts", "jest.config.cjs"), "jest")
+    direct("test", "mocha", ("mocha",), (".mocharc.json", ".mocharc.yml", ".mocharc.js"))
+    return out.found
+
+
+# ── go ────────────────────────────────────────────────────────────────────
+
+_GOLANGCI_CONFIGS = (".golangci.yml", ".golangci.yaml", ".golangci.toml", ".golangci.json")
+
+
+def _is_go_repo(repo: Repo) -> bool:
+    return repo.exists("go.mod") or repo.exists("go.sum")
+
+
+def _detect_go(repo: Repo) -> list[_Candidate]:
+    out = _Collector(GO)
+    marker = "go.mod" if repo.exists("go.mod") else "go.sum"
+    out.add("test", "go-test", ("go", "test", "./..."), evidence=marker)
+    # `go vet` is the closest thing to a type/soundness check that ships with
+    # the toolchain; `go build` is the build kind, not this one.
+    out.add("typecheck", "go-vet", ("go", "vet", "./..."), evidence=marker)
+    out.add("build", "go-build", ("go", "build", "./..."), evidence=marker)
+    if (config := _first_existing(repo, _GOLANGCI_CONFIGS)) is not None:
+        out.add("lint", "golangci-lint", ("golangci-lint", "run"), evidence=config)
+    # No format check on purpose: `gofmt -l .` prints unformatted files and still
+    # exits 0, so an exit-code gate would report a permanent pass. A check that
+    # cannot fail is worse than no check at all.
+    return out.found
+
+
+# ── rust ──────────────────────────────────────────────────────────────────
+
+
+def _is_rust_repo(repo: Repo) -> bool:
+    return repo.exists("Cargo.toml")
+
+
+def _detect_rust(repo: Repo) -> list[_Candidate]:
+    out = _Collector(RUST)
+    out.add("test", "cargo-test", ("cargo", "test"), evidence="Cargo.toml")
+    out.add("typecheck", "cargo-check", ("cargo", "check", "--all-targets"), evidence="Cargo.toml")
+    # rustfmt ships with the default toolchain and `--check` is a real exit code.
+    out.add("format", "cargo-fmt", ("cargo", "fmt", "--check"), evidence="Cargo.toml")
+    out.add("build", "cargo-build", ("cargo", "build"), evidence="Cargo.toml")
+
+    # Clippy needs evidence: on a toolchain without the component, `cargo clippy`
+    # exits non-zero, which the gate would report as a lint failure rather than
+    # a missing tool. `-D warnings` is required for the check to mean anything —
+    # clippy exits 0 on warnings otherwise.
+    cargo_toml = repo.read("Cargo.toml") or ""
+    evidence = _first_existing(repo, ("clippy.toml", ".clippy.toml"))
+    if evidence is None and "[lints.clippy]" in cargo_toml:
+        evidence = "Cargo.toml [lints.clippy]"
+    if evidence:
+        out.add(
+            "lint",
+            "clippy",
+            ("cargo", "clippy", "--all-targets", "--", "-D", "warnings"),
+            evidence=evidence,
+        )
+    return out.found
+
+
+# ── makefile fallback ─────────────────────────────────────────────────────
+
+_MAKEFILES = ("Makefile", "makefile", "GNUmakefile")
+
+#: Target names accepted per kind. `format` is check-shaped only, same rule as
+#: the node scripts.
+_MAKE_TARGETS: dict[str, tuple[str, ...]] = {
+    "lint": ("lint",),
+    "format": ("fmt-check", "format-check", "check-format", "fmt_check"),
+    "typecheck": ("typecheck", "type-check", "types", "mypy"),
+    "test": ("test", "tests"),
+    "build": ("build",),
+}
+
+#: A target is `name:` but not `name :=` / `name ::=` — assignments are not
+#: targets, and treating one as a target produces a check that can't run.
+_MAKE_TARGET_RE = re.compile(r"^([A-Za-z0-9_][A-Za-z0-9_.\-/]*)\s*:(?!=)", re.MULTILINE)
+
+
+def _is_make_repo(repo: Repo) -> bool:
+    return any(repo.exists(name) for name in _MAKEFILES)
+
+
+def _detect_make(repo: Repo) -> list[_Candidate]:
+    out = _Collector(MAKE)
+    filename = _first_existing(repo, _MAKEFILES)
+    if filename is None:  # pragma: no cover - guarded by _is_make_repo
+        return []
+    text = repo.read(filename) or ""
+    targets = {m.group(1) for m in _MAKE_TARGET_RE.finditer(text)}
+    for kind, names in _MAKE_TARGETS.items():
+        for target in names:
+            if target in targets:
+                out.add(
+                    kind,  # type: ignore[arg-type]
+                    f"make:{target}",
+                    ("make", target),
+                    evidence=f"{filename} target {target!r}",
+                )
+                break
+    return out.found
+
+
 #: (ecosystem name, applies?, detector). Order sets the order ecosystems appear
-#: in a report; within a kind each ecosystem is selected independently, because
-#: a repo with both a pyproject and a package.json really does need both suites.
 DETECTORS: tuple[tuple[str, Callable[[Repo], bool], Callable[[Repo], list[_Candidate]]], ...] = (
     (PYTHON, _is_python_repo, _detect_python),
+    (NODE, _is_node_repo, _detect_node),
+    (GO, _is_go_repo, _detect_go),
+    (RUST, _is_rust_repo, _detect_rust),
+    (MAKE, _is_make_repo, _detect_make),
 )
 
 
@@ -391,6 +682,7 @@ def detect_candidates(
     for _, applies, detector in DETECTORS:
         if applies(repo):
             candidates.extend(detector(repo))
+    candidates = _drop_redundant_make(candidates)
 
     kind_order = {kind: i for i, kind in enumerate(ALL_KINDS)}
     selected = [c for c in candidates if c.check.kind in wanted]
@@ -418,3 +710,16 @@ def _require_dir(root: Path) -> None:
     # A typo'd path must not look like "this repo has nothing to verify".
     if not root.is_dir():
         raise FileNotFoundError(f"not a directory: {root}")
+
+
+def _drop_redundant_make(candidates: Sequence[_Candidate]) -> list[_Candidate]:
+    """Keep Makefile candidates only for kinds no real ecosystem covers.
+
+    `make test` in a Python repo almost always just calls pytest; running both
+    doubles the wall clock for one signal. Where make covers a kind nothing else
+    does (a shellcheck lint target, say), it's the only thing that will find it.
+    """
+    covered = {c.check.kind for c in candidates if c.check.ecosystem != MAKE}
+    return [
+        c for c in candidates if c.check.ecosystem != MAKE or c.check.kind not in covered
+    ]
