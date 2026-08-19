@@ -119,9 +119,7 @@ def test_a_doctest_block_keeps_its_prompts_and_is_marked_as_a_doctest():
 def test_a_shell_transcript_is_tagged_console_not_python():
     # `python -m pkg --list` happens to be syntactically valid Python (a chain
     # of subtractions), so shell has to be recognised before Python is tried.
-    example = only(
-        extract_examples(source('"""T.\n\n    python -m pkg --list\n"""\n'))
-    )
+    example = only(extract_examples(source('"""T.\n\n    python -m pkg --list\n"""\n')))
     assert example.language == "console"
 
 
@@ -164,26 +162,34 @@ def test_an_absurdly_long_block_is_not_pasted_into_a_readme():
 
 
 def test_an_example_whose_imports_resolve_is_verified():
-    found = extract_examples(source('"""T.\n\n    from pkg import run\n\n    run()\n"""\n'))
+    found = extract_examples(
+        source('"""T.\n\n    from pkg import run\n\n    run()\n"""\n')
+    )
     example = only(validate_examples(found, api()))
     assert example.verified is True
     assert "pkg.run" in example.symbols
 
 
 def test_an_example_importing_a_symbol_the_project_no_longer_exports_is_not_verified():
-    found = extract_examples(source('"""T.\n\n    from pkg import gone\n\n    gone()\n"""\n'))
+    found = extract_examples(
+        source('"""T.\n\n    from pkg import gone\n\n    gone()\n"""\n')
+    )
     example = only(validate_examples(found, api()))
     assert example.verified is False
     assert "gone" in example.verification
 
 
 def test_an_example_importing_a_module_that_no_longer_exists_is_not_verified():
-    found = extract_examples(source('"""T.\n\n    import pkg.removed\n\n    pkg.removed.f()\n"""\n'))
+    found = extract_examples(
+        source('"""T.\n\n    import pkg.removed\n\n    pkg.removed.f()\n"""\n')
+    )
     assert validate_examples(found, api())[0].verified is False
 
 
 def test_importing_a_submodule_by_name_resolves_against_the_module_list():
-    found = extract_examples(source('"""T.\n\n    from pkg import thing\n\n    thing.run()\n"""\n'))
+    found = extract_examples(
+        source('"""T.\n\n    from pkg import thing\n\n    thing.run()\n"""\n')
+    )
     assert validate_examples(found, api())[0].verified is True
 
 
@@ -191,7 +197,9 @@ def test_third_party_imports_are_left_alone(monkeypatch):
     # The tool cannot know whether `httpx` is installed without executing
     # something, and guessing would turn a fine example into a false negative.
     found = extract_examples(
-        source('"""T.\n\n    import httpx\n\n    from pkg import run\n\n    run()\n"""\n')
+        source(
+            '"""T.\n\n    import httpx\n\n    from pkg import run\n\n    run()\n"""\n'
+        )
     )
     assert validate_examples(found, api())[0].verified is True
 
@@ -202,7 +210,9 @@ def test_a_snippet_that_never_touches_the_project_is_dropped_as_irrelevant():
 
 
 def test_tests_that_exercise_a_symbol_strengthen_the_verification_note():
-    found = extract_examples(source('"""T.\n\n    from pkg import run\n\n    run()\n"""\n'))
+    found = extract_examples(
+        source('"""T.\n\n    from pkg import run\n\n    run()\n"""\n')
+    )
     verified = validate_examples(found, api(exercised=("pkg.run",)))
     assert "test" in only(verified).verification
 
@@ -311,6 +321,47 @@ def test_a_long_test_is_not_a_standalone_example():
         source(TEST_FILE, path="tests/test_run.py", module="tests.test_run")
     )
     assert all("k = 11" not in e.code for e in found)
+
+
+HELPER_TEST_FILE = """\
+from pkg import run
+
+
+def provider():
+    return object(), object()
+
+
+def test_run_against_a_helper():
+    prov, client = provider()
+    assert run(prov) == 42
+
+
+def test_run_multiline():
+    assert run() == [
+        1,
+        2,
+    ]
+"""
+
+
+def test_a_test_that_leans_on_a_local_helper_is_not_a_standalone_example():
+    # `prov, client = provider()` reads like usage and cannot be run: `provider`
+    # is defined in the test file, not in the project. Copying it into a README
+    # hands the reader a snippet that fails on line one.
+    found = extract_test_examples(
+        source(HELPER_TEST_FILE, path="tests/test_run.py", module="tests.test_run")
+    )
+    assert all("provider()" not in e.code for e in found)
+
+
+def test_a_multiline_statement_keeps_its_shape_without_stray_indentation():
+    # Joining per-statement source segments leaves continuation lines indented to
+    # their original column inside the function, which renders as a broken block.
+    found = extract_test_examples(
+        source(HELPER_TEST_FILE, path="tests/test_run.py", module="tests.test_run")
+    )
+    example = only(found)
+    assert example.code == "from pkg import run\n\nassert run() == [\n    1,\n    2,\n]"
 
 
 def test_exercised_symbols_are_read_out_of_the_test_corpus():

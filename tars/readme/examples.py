@@ -34,6 +34,7 @@ from __future__ import annotations
 import ast
 import json
 import re
+import textwrap
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 
@@ -420,12 +421,18 @@ def _is_shell(text: str, commands: Sequence[str]) -> bool:
 def extract_test_examples(
     source: SourceFile, *, packages: Sequence[str] = ()
 ) -> tuple[Example, ...]:
-    """Short, fixtureless tests, as examples, with the imports they need.
+    """Short, self-contained tests, as examples, with the imports they need.
 
-    Fixtures are the cutoff. A test taking `tmp_path` or a custom fixture is not
-    a snippet a reader can run; a test taking nothing is a complete call.
+    Two cutoffs, both about whether a reader could actually run the snippet:
+
+    * **Fixtures.** A test taking `tmp_path` or a project fixture is not a
+      snippet, it is half of one.
+    * **Local helpers.** `prov, client = provider()` reads exactly like usage,
+      and `provider` is defined further up the test file. Copied into a README it
+      fails on line one, which is worse than showing nothing.
     """
     imports = _module_imports(source)
+    local = _module_level_names(source.tree)
     found: list[Example] = []
     for node in source.tree.body:
         if not isinstance(node, ast.FunctionDef) or not node.name.startswith("test"):
@@ -437,10 +444,9 @@ def extract_test_examples(
         if not body or len(body) > MAX_TEST_STATEMENTS:
             continue
 
-        segments = [ast.get_source_segment(source.text, stmt) for stmt in body]
-        if any(segment is None for segment in segments):  # pragma: no cover
+        code_body = _statement_block(source.text, body)
+        if code_body is None:  # pragma: no cover - needs a synthesised tree
             continue
-        code_body = "\n".join(s for s in segments if s)
         used = _names_used(node)
         needed = [line for name, line in imports if name in used]
         if not needed:
@@ -448,6 +454,8 @@ def extract_test_examples(
         if packages and not any(
             _root_of_import(line) in set(packages) for line in needed
         ):
+            continue
+        if used & local:
             continue
 
         code = "\n".join(needed) + "\n\n" + code_body
@@ -473,6 +481,43 @@ def _docstring_literal_stmt(stmt: ast.stmt) -> ast.Constant | None:
     ):
         return stmt.value
     return None
+
+
+def _statement_block(text: str, body: Sequence[ast.stmt]) -> str | None:
+    """The verbatim source of `body`, dedented as one block.
+
+    Taken as a line range rather than statement by statement: per-statement
+    segments start at the statement's column, so the continuation lines of a
+    multi-line call keep their original indentation and the block renders
+    ragged. Slicing the file and dedenting once preserves relative indentation,
+    which is the only thing that matters for Python.
+    """
+    first = body[0]
+    last = body[-1]
+    end = getattr(last, "end_lineno", None)
+    if end is None:  # pragma: no cover - always set by ast.parse
+        return None
+    lines = text.expandtabs().splitlines()[first.lineno - 1 : end]
+    if not lines:  # pragma: no cover - a body always has source
+        return None
+    return textwrap.dedent("\n".join(lines)).strip("\n")
+
+
+def _module_level_names(tree: ast.Module) -> set[str]:
+    """Names the test file defines for itself: helpers, fixtures, constants.
+
+    A test body that touches one of these isn't self-contained, however much it
+    looks like usage.
+    """
+    names: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names.add(node.name)
+        elif isinstance(node, ast.Assign):
+            names.update(t.id for t in node.targets if isinstance(t, ast.Name))
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            names.add(node.target.id)
+    return names
 
 
 def _module_imports(source: SourceFile) -> list[tuple[str, str]]:
