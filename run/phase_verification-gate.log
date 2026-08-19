@@ -1,0 +1,33 @@
+**Phase verification-gate: complete.** Nine commits, `705bc2d`…`7022033`, all on master.
+
+## What it does
+
+`tars/verification/` maps a repo to its check surface and runs it — five modules, ~2,000 lines, stdlib only:
+
+| module | role |
+|---|---|
+| `types.py` | `Check` / `CheckResult` / `GateReport`, three-valued verdict |
+| `detect.py` | evidence-based, filesystem-only detection: python, node, go, rust, make |
+| `runner.py` | one uniform `run_check()`; repo-local tools first, process-group timeout kill |
+| `gate.py` | select by availability → run → report |
+| `cli.py` + `__main__.py` | `tars-verify` / `python -m tars.verification` |
+
+Three properties I designed against false passes, each pinned by tests:
+
+- **`no-checks` ≠ `pass`** — exits 3, not 0. A repo with no detectable checks must not read as a green build.
+- **Missing tool ≠ failure** — stays in the report as `unavailable` with the evidence that made the gate look for it, rather than being dropped.
+- **Never mutates the tree** — formatters run `--check`, `build` is opt-in. Three tools are omitted on purpose and documented: `gofmt -l` (exits 0 on unformatted files, so the check can never fail), unconfigured clippy (missing component reads as a lint failure), and pre-commit (its hooks rewrite files).
+
+## Verification — honest result
+
+- **`pytest`: 284 passed**, 160 of them this phase's.
+- **This phase's files: clean** under all four of the repo's own checks (ruff, ruff-format, mypy).
+- **`python -m tars.verification` on TARS: exit 1** — lint FAIL, format FAIL, typecheck FAIL, test PASS.
+
+Every one of those three failures is pre-existing provider-layer code, not this phase: 14 ruff errors (10 in `tars/providers/*`, 4 in the provider tests), 8 files ruff-format would rewrite (all provider-phase), and 1 mypy error at `openrouter_provider.py:223`. I left them alone — out of scope, and those same files exist differently on `phase/provider-adapter`, so blanket-formatting them on master would manufacture conflicts in code whose fate isn't decided. The gate is reporting the repo accurately; the repo just isn't green yet.
+
+Dogfooded on two foreign repos: `~/.nvm` → detected `npm run test` from `package.json` scripts; a plugin checkout with a scriptless `package.json` and only a `.pre-commit-config.yaml` → `no-checks`, exit 3, which is the correct refusal rather than a guess.
+
+Two caveats worth stating: the `tars-verify` console script is declared and its entry-point string resolves (tested the way the installer resolves it), but I couldn't exercise it as an installed script — this venv has no setuptools, so `pip install -e .` can't build without network. `python -m tars.verification` is proven by real subprocess tests. And the entry-point test skips on 3.10, which has no `tomllib`.
+
+One memory saved: [tars-check-surface-and-failing-baseline](/home/chaitanya/.claude/projects/-home-chaitanya-TARS/memory/tars-check-surface-and-failing-baseline.md) — what verifies this repo (configured nowhere; ruff runs on defaults) and the fact that three of the four checks already fail, so a future session doesn't read `exit 1` as its own damage.

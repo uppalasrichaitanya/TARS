@@ -64,3 +64,5 @@ STILL NEEDS YOUR DECISION: (A) master vs (B) phase/provider-adapter. Unchanged
 from the 03:18 block. Note (A) already handles the auth-token case; that was
 never the differentiator between them.
 [03:27:15] Phase 'provider-adapter' finished. Committing checkpoint.
+[03:27:20] ── Foundation phase: verification-gate ──
+[04:09:18] Phase 'verification-gate' finished. Committing checkpoint.
