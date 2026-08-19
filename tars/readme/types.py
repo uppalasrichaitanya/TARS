@@ -37,6 +37,10 @@ ExampleLanguage = Literal["python", "console", "json", "text"]
 #: Ordering is trust order, used to pick which examples survive a length budget.
 KIND_ORDER: tuple[ExampleKind, ...] = ("doctest", "docstring", "test")
 
+#: Also trust order, within one kind. A call shows how the project is used; a
+#: config fragment is supporting material for someone already using it.
+LANGUAGE_ORDER: tuple[ExampleLanguage, ...] = ("python", "console", "json", "text")
+
 
 @dataclass(frozen=True)
 class Example:
@@ -150,12 +154,24 @@ class CommandFact:
     source: str
     #: One-line description, taken from the command's own argparse `description`.
     description: str = ""
-    #: Flags the command really accepts, read out of its parser definition.
+    #: Flags the command really accepts, read out of its parser definition. One
+    #: entry per option, so `-q/--quiet` is one flag and not two.
     flags: tuple[str, ...] = ()
+    #: Other ways to type this same entry point — `python -m widget` for a
+    #: console script whose target lives inside `widget`. Same code, same
+    #: `--help`, so it belongs in this command's section rather than its own.
+    aliases: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.flags, tuple):
             object.__setattr__(self, "flags", tuple(self.flags))
+        if not isinstance(self.aliases, tuple):
+            object.__setattr__(self, "aliases", tuple(self.aliases))
+
+    @property
+    def invocations(self) -> tuple[str, ...]:
+        """Every spelling of this command, the canonical one first."""
+        return (self.name, *self.aliases)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -164,6 +180,7 @@ class CommandFact:
             "source": self.source,
             "description": self.description,
             "flags": list(self.flags),
+            "aliases": list(self.aliases),
         }
 
 

@@ -30,6 +30,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from ..verification.detect import detect_checks, detect_ecosystems
+from ..verification.types import DEFAULT_KINDS
 from .examples import (
     ProjectApi,
     exercised_symbols,
@@ -41,6 +42,7 @@ from .manifest import Manifest, read_manifest
 from .source import SourceFile, SourceTree, collect_sources
 from .types import (
     KIND_ORDER,
+    LANGUAGE_ORDER,
     CheckFact,
     CommandFact,
     Example,
@@ -266,7 +268,9 @@ def select_examples(
 
     Ranking, in order: verified before unverified, then by kind (a doctest was
     written to be executed, a docstring block to be read, a test to catch
-    regressions), then shallower modules before deeper ones, then file order.
+    regressions), then by language (a call shows how the project is used; a
+    config fragment supports someone already using it), then shallower modules
+    before deeper ones, then file order.
     Near-duplicates are dropped, since two spellings of the same call teach a
     reader nothing the first one didn't.
     """
@@ -289,14 +293,22 @@ def select_examples(
     return tuple(chosen)
 
 
-def _rank(example: Example) -> tuple[int, int, int, str, int]:
-    kind = (
-        KIND_ORDER.index(example.kind)
-        if example.kind in KIND_ORDER
-        else len(KIND_ORDER)
-    )
+def _rank(example: Example) -> tuple[int, int, int, int, str, int]:
+    kind = _index(KIND_ORDER, example.kind)
+    language = _index(LANGUAGE_ORDER, example.language)
     depth = example.module.count(".") if example.module else 0
-    return (0 if example.verified else 1, kind, depth, example.path, example.line)
+    return (
+        0 if example.verified else 1,
+        kind,
+        language,
+        depth,
+        example.path,
+        example.line,
+    )
+
+
+def _index(order: Sequence[str], value: str) -> int:
+    return order.index(value) if value in order else len(order)
 
 
 def _fingerprint(code: str) -> str:
@@ -326,9 +338,13 @@ def _example_notes(found: Sequence[Example], chosen: Sequence[Example]) -> list[
 def _command_facts(manifest: Manifest, tree: SourceTree) -> tuple[CommandFact, ...]:
     by_module = tree.by_module()
     facts: list[CommandFact] = []
+    claimed: set[str] = set()
     for name, target in sorted(manifest.scripts.items()):
         module = target.split(":")[0].strip()
         description, flags = _describe_entry_point(by_module.get(module))
+        package = _runnable_package_behind(module, tree)
+        if package:
+            claimed.add(package)
         facts.append(
             CommandFact(
                 name=name,
@@ -336,9 +352,12 @@ def _command_facts(manifest: Manifest, tree: SourceTree) -> tuple[CommandFact, .
                 source=manifest.source,
                 description=description,
                 flags=flags,
+                aliases=(f"python -m {package}",) if package else (),
             )
         )
     for package in tree.runnable:
+        if package in claimed:
+            continue
         description, flags = _describe_entry_point(_parser_module(package, tree))
         facts.append(
             CommandFact(
@@ -350,6 +369,22 @@ def _command_facts(manifest: Manifest, tree: SourceTree) -> tuple[CommandFact, .
             )
         )
     return tuple(facts)
+
+
+def _runnable_package_behind(module: str, tree: SourceTree) -> str:
+    """The runnable package a console script's target lives in, if any.
+
+    `tars-readme = "tars.readme.cli:main"` and `python -m tars.readme` run the
+    same code, print the same `--help` and take the same flags, so listing them
+    as two commands asks a reader to find a difference that isn't there. The
+    evidence for merging them is containment: the script's target module has to
+    live inside a package that has a `__main__.py`. A script pointing at
+    `other.cli:main` says nothing about `python -m widget`.
+    """
+    for package in sorted(tree.runnable, key=len, reverse=True):
+        if module == package or module.startswith(f"{package}."):
+            return package
+    return ""
 
 
 def _main_path(package: str, by_module: dict[str, SourceFile]) -> str:
@@ -409,14 +444,27 @@ def _describe_entry_point(source: SourceFile | None) -> tuple[str, tuple[str, ..
             if not description:
                 description = _keyword_string(node, "description")
         elif callee == "add_argument":
-            flags.extend(
-                arg.value
-                for arg in node.args
-                if isinstance(arg, ast.Constant)
-                and isinstance(arg.value, str)
-                and arg.value.startswith("-")
-            )
+            option = _option_spellings(node)
+            if option:
+                flags.append(option)
     return _one_line(description), tuple(dict.fromkeys(flags))
+
+
+def _option_spellings(call: ast.Call) -> str:
+    """`-q/--quiet` for one `add_argument("-q", "--quiet", ...)` call.
+
+    Grouped per call because that is what the file says: they are two spellings
+    of one option. Flattened, a command with five aliased options looks like a
+    command with ten switches.
+    """
+    spellings = [
+        arg.value
+        for arg in call.args
+        if isinstance(arg, ast.Constant)
+        and isinstance(arg.value, str)
+        and arg.value.startswith("-")
+    ]
+    return "/".join(spellings)
 
 
 def _callee_name(func: ast.expr) -> str:
@@ -447,10 +495,13 @@ def _check_facts(root: Path) -> tuple[tuple[CheckFact, ...], list[str]]:
     """What the verification gate says this repo can run.
 
     Reusing the gate means the README's "how to check it" section describes the
-    same commands CI would run, rather than a second guess at them.
+    same commands CI would run, rather than a second guess at them. Restricted
+    to the gate's default kinds for the same reason: `build` is opt-in there
+    (`--include build`), so printing `python -m build` under "verifying it"
+    would document a check `tars-verify` doesn't run.
     """
     try:
-        checks = detect_checks(root)
+        checks = detect_checks(root, kinds=DEFAULT_KINDS)
     except (OSError, ValueError) as exc:  # pragma: no cover - defensive
         return (), [f"check detection failed ({exc})"]
     return (

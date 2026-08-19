@@ -69,6 +69,7 @@ def make_repo(tmp_path, *, manifest=PYPROJECT):
         "    )\n"
         '    parser.add_argument("path")\n'
         '    parser.add_argument("--json", action="store_true", help="machine output")\n'
+        '    parser.add_argument("-q", "--quiet", action="store_true")\n'
         "    return parser\n\n\n"
         "def main(argv=None):\n"
         "    return 0\n",
@@ -192,9 +193,43 @@ def test_a_commands_description_and_flags_are_read_from_its_own_parser(tmp_path)
 
 
 def test_a_runnable_package_is_offered_as_python_dash_m(tmp_path):
-    facts = inspect_project(make_repo(tmp_path))
-    names = [c.name for c in facts.commands]
+    write(tmp_path / "widget" / "__init__.py", "")
+    write(tmp_path / "widget" / "__main__.py", "print(1)\n")
+    names = [c.name for c in inspect_project(tmp_path).commands]
     assert "python -m widget" in names
+
+
+def test_a_script_and_the_python_m_form_of_it_are_one_command_not_two(tmp_path):
+    # `widget` and `python -m widget` run the same code, print the same --help
+    # and take the same flags. Two identical sections is the filler the spec
+    # forbids, and it makes a reader hunt for the difference between them.
+    facts = inspect_project(make_repo(tmp_path))
+    assert [c.name for c in facts.commands] == ["widget"]
+    assert facts.commands[0].aliases == ("python -m widget",)
+
+
+def test_a_runnable_package_no_script_points_at_stays_its_own_command(tmp_path):
+    # Merging is evidence-based: the script's target has to live inside the
+    # package. `other.cli:main` says nothing about `python -m widget`.
+    write(
+        tmp_path / "pyproject.toml",
+        PYPROJECT.replace('widget = "widget.cli:main"', 'other = "other.cli:main"'),
+    )
+    write(tmp_path / "widget" / "__init__.py", "")
+    write(tmp_path / "widget" / "__main__.py", "print(1)\n")
+    write(tmp_path / "other" / "__init__.py", "")
+    write(tmp_path / "other" / "cli.py", "def main():\n    return 0\n")
+    names = [c.name for c in inspect_project(tmp_path).commands]
+    assert "python -m widget" in names
+
+
+def test_flag_aliases_are_reported_as_one_flag_with_two_spellings(tmp_path):
+    # `-q, --quiet` is one option. Listing both doubles the flag line and
+    # implies the command has twice as many switches as it does.
+    facts = inspect_project(make_repo(tmp_path))
+    command = {c.name: c for c in facts.commands}["widget"]
+    assert "-q/--quiet" in command.flags
+    assert "-q" not in command.flags
 
 
 def test_a_python_dash_m_command_points_at_a_file_that_exists(tmp_path):
@@ -324,6 +359,28 @@ def test_selection_drops_a_snippet_that_repeats_one_already_chosen(tmp_path):
     assert select_examples((first, same), limit=5) == (first,)
 
 
+def test_a_config_fragment_ranks_below_a_snippet_that_calls_something(tmp_path):
+    # A JSON override file is supporting material; a call is how the project is
+    # used. With room for one example, the call is the one worth printing.
+    config = Example(
+        code='{"why": "because"}',
+        language="json",
+        kind="docstring",
+        path="a.py",
+        line=1,
+        verified=True,
+    )
+    usage = Example(
+        code="from widget import convert\n\nconvert()",
+        language="python",
+        kind="docstring",
+        path="z.py",
+        line=9,
+        verified=True,
+    )
+    assert select_examples((config, usage), limit=1) == (usage,)
+
+
 # ── checks ────────────────────────────────────────────────────────────────
 
 
@@ -334,6 +391,14 @@ def test_checks_come_from_the_verification_gate_with_their_evidence(tmp_path):
     test_check = next(c for c in facts.checks if c.kind == "test")
     assert test_check.command_line
     assert test_check.evidence
+
+
+def test_the_checks_shown_are_the_ones_the_gate_would_actually_run(tmp_path):
+    # `build` is opt-in in the gate (ALL_KINDS, not DEFAULT_KINDS). A README
+    # telling a reader to run a command `tars-verify` doesn't run is describing
+    # a verification surface this project doesn't have.
+    facts = inspect_project(make_repo(tmp_path))
+    assert "build" not in {c.kind for c in facts.checks}
 
 
 def test_the_ecosystems_the_gate_recognised_are_recorded(tmp_path):

@@ -214,6 +214,21 @@ def test_a_command_is_listed_with_its_own_description(tmp_path):
     assert "Convert a thing on the command line." in text
 
 
+def test_two_spellings_of_one_command_share_a_single_section(tmp_path):
+    # One heading, both invocations in the block. A second identical section for
+    # `python -m widget` is the filler the spec forbids.
+    aliased = CommandFact(
+        name="widget",
+        target="widget.cli:main",
+        source="pyproject.toml",
+        description="Convert a thing on the command line.",
+        aliases=("python -m widget",),
+    )
+    text = render_readme(facts(commands=(aliased,)))
+    assert "```console\nwidget\npython -m widget\n```" in text
+    assert text.count("Convert a thing on the command line.") == 1
+
+
 def test_the_install_line_names_the_dev_extra_when_there_is_one(tmp_path):
     text = render_readme(facts(extras={"dev": ("pytest",)}))
     assert 'pip install -e ".[dev]"' in text

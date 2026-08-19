@@ -161,16 +161,11 @@ def _command_block(command: CommandFact) -> list[str]:
     lines = [f"### `{command.name}`"]
     if command.description:
         lines += ["", command.description]
-    lines += ["", "```console", _usage(command), "```"]
+    lines += ["", "```console", *command.invocations, "```"]
     if command.flags:
         lines += ["", "Flags: " + ", ".join(f"`{f}`" for f in command.flags)]
     lines += ["", f"<sub>declared in `{command.source}`</sub>"]
     return lines
-
-
-def _usage(command: CommandFact) -> str:
-    """The command as a reader would type it, with its own flags if it has any."""
-    return command.name
 
 
 # ── examples ──────────────────────────────────────────────────────────────
