@@ -12,7 +12,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
 
-from .errors import ProviderResponseError
+from .errors import ProviderAPIError, ProviderResponseError, is_retryable_status
 from .types import LLMResponse, Message, ToolDef
 
 # Big enough that a normal coding-agent turn isn't truncated, small enough to
@@ -127,4 +127,36 @@ def decode_arguments(raw: Any, *, provider: str, tool_name: str) -> dict[str, An
         f"{provider} returned unsupported argument type for tool "
         f"{tool_name!r}: {type(raw).__name__}",
         provider=provider,
+    )
+
+
+def translate_api_exception(
+    exc: BaseException,
+    *,
+    provider: str,
+    model: str | None = None,
+) -> ProviderAPIError:
+    """Wrap an SDK/HTTP exception as a ProviderAPIError.
+
+    Deliberately duck-typed on `status_code` / `response.status_code` rather
+    than importing either SDK's exception tree: both the Anthropic and OpenAI
+    clients expose the status the same way, and an exception with no status at
+    all is a connection/timeout failure, which is retryable.
+    """
+    status = getattr(exc, "status_code", None)
+    if status is None:
+        response = getattr(exc, "response", None)
+        status = getattr(response, "status_code", None)
+    retryable = is_retryable_status(status) if status is not None else True
+    detail = getattr(exc, "message", None) or str(exc) or type(exc).__name__
+    where = f"{provider} request failed"
+    if status is not None:
+        where += f" with HTTP {status}"
+    return ProviderAPIError(
+        f"{where}: {detail}",
+        provider=provider,
+        model=model,
+        status_code=status,
+        retryable=retryable,
+        original=exc,
     )
