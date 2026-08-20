@@ -68,3 +68,7 @@ never the differentiator between them.
 [04:09:18] Phase 'verification-gate' finished. Committing checkpoint.
 [04:09:23] ── Foundation phase: readme-writer ──
 [05:31:17] Phase 'readme-writer' finished. Committing checkpoint.
+[05:31:22] ── Foundation phase: router-classifier ──
+[05:35:43]   call failed (exit 1), attempt 1/8 — retrying in 30s. See /home/chaitanya/TARS/run/phase_router-classifier.log
+[05:48:34]   (succeeded on retry attempt 2)
+[05:48:34] Phase 'router-classifier' finished. Committing checkpoint.
