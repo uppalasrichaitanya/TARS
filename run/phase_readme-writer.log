@@ -1,0 +1,26 @@
+Phase complete. Report:
+
+## `readme-writer` — done
+
+**What shipped.** `tars/readme/` (9 modules), a `tars-readme` console script and `python -m tars.readme` as the same entry point, and 178 tests across 8 files. It reads a repo by AST only — never imports or executes the target — and mines usage examples from docstrings, doctests and tests, then *resolves each one against the current source* before printing it. Unverified snippets are withheld, never caveated and never "corrected": every printed block carries `path:line`, so the citation is checkable. Zero runtime dependencies.
+
+**The acceptance test — run on TARS itself.** `README.md` (146 lines) is the tool's own output, committed verbatim rather than hand-edited afterwards, which is the only version of that test worth anything. Six verified examples from `tars.providers`, `tars.readme` and `tars.verification`; both commands with flags read out of their real argparse definitions; the "Verifying it" block reuses the verification gate so it lists the commands `tars-verify` actually runs. `python -m tars.readme . --check` reports `up to date`, exit 0.
+
+Reading that generated file was the most productive review step of the phase: it exposed four defects that 162 passing tests had not (a script and its `python -m` form rendered as duplicate sections, `-o`/`--output` counted as two flags, `python -m build` documented though the gate needs `--include build`, and a JSON config fragment outranking a real call). All four fixed test-first in `bb2a92d`.
+
+**Verification, honestly.**
+
+| Check | Whole repo | This phase's code |
+|---|---|---|
+| `pytest` | **pass** — 462 passed | pass — 178 passed |
+| `ruff check .` | **fail** — 14 errors | pass — clean |
+| `ruff format --check .` | **fail** — 8 files | pass — clean |
+| `mypy tars tests` | **fail** — 1 error | pass — clean |
+
+`tars-verify .` → **FAIL (3 failed, 1 passed), exit 1.** Every one of those 23 findings is in `tars/providers/*` or `tests/test_*provider*.py` — the pre-existing baseline already recorded in memory, unchanged by this phase. I verified that file-by-file rather than assuming it, and did not run `ruff --fix` across the provider layer: those files also exist, differently, on the rival provider branch.
+
+**One regression I introduced and fixed.** Committing the README broke `ruff format --check .` — ruff 0.16 formats Python inside markdown fences, and verbatim snippets keep their original comment alignment. Reformatting the snippets was the tempting fix and the wrong one: it turns a checkable citation into a paraphrase. So the formatter now skips the generated file (`force-exclude` too, or an explicit path bypasses the exclude), and the verbatim property is pinned by a test instead of a comment. I confirmed that test bites by making `_dedent` collapse spaces before `#` and watching it fail on `tars/providers/__init__.py:5`, then reverted.
+
+**Assumption worth flagging.** I did not write a `.tars/readme.json`, so TARS's README has no "Why it exists" section. Intent isn't recoverable from an AST, and I'd rather leave the section absent than put a sentence about the project's purpose in the README that a later phase contradicts. Supplying that file is a one-line change whenever you want the section.
+
+**Memory.** No new entries were warranted — the ruff/markdown interaction and the regeneration command are both recorded in the repo itself. I did correct one existing entry that my change made false: `tars-check-surface-and-failing-baseline` claimed pyproject has no `[tool.ruff]` section. It now has one, selecting no rules, so ruff still runs on defaults.

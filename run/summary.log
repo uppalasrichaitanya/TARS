@@ -66,3 +66,5 @@ never the differentiator between them.
 [03:27:15] Phase 'provider-adapter' finished. Committing checkpoint.
 [03:27:20] ── Foundation phase: verification-gate ──
 [04:09:18] Phase 'verification-gate' finished. Committing checkpoint.
+[04:09:23] ── Foundation phase: readme-writer ──
+[05:31:17] Phase 'readme-writer' finished. Committing checkpoint.
