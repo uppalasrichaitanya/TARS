@@ -67,7 +67,9 @@ def test_both_splits_are_big_enough_to_mean_something() -> None:
 def test_every_tier_appears_in_both_splits() -> None:
     for split in (dev_split(), holdout_split()):
         tiers = {c.tier for c in split}
-        assert tiers == {0, 1, 2}, f"split is missing tiers: {sorted({0, 1, 2} - tiers)}"
+        assert tiers == {0, 1, 2}, (
+            f"split is missing tiers: {sorted({0, 1, 2} - tiers)}"
+        )
 
 
 def test_every_blast_level_appears_in_both_splits() -> None:

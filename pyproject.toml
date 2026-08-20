@@ -32,6 +32,12 @@ tars-memory = "tars.memory.cli:main"
 [tool.setuptools.packages.find]
 include = ["tars*"]
 
+# The router's labeled set is read out of the installed package with
+# importlib.resources, so it has to be declared or it ships only in the source
+# tree — present in development, missing from the wheel.
+[tool.setuptools.package-data]
+"tars.router" = ["data/*.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
