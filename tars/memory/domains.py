@@ -373,11 +373,11 @@ DEFAULT_DOMAINS = DomainMap(
 def _domains_from_dict(data: dict[str, Any], source: str) -> tuple[Domain, ...]:
     raw = data.get("domains", {})
     if not isinstance(raw, dict):
-        raise ValueError(f"{source}: 'domains' must be an object of name -> markers")
+        raise TypeError(f"{source}: 'domains' must be an object of name -> markers")
     domains: list[Domain] = []
     for name, spec in raw.items():
         if not isinstance(spec, dict):
-            raise ValueError(f"{source}: domain {name!r} must be an object")
+            raise TypeError(f"{source}: domain {name!r} must be an object")
         domains.append(
             Domain(
                 name=str(name),
@@ -395,7 +395,13 @@ def load_domain_map(root: str | Path = ".") -> DomainMap:
     An override either replaces the defaults or, with ``"extends": "default"``,
     adds to them. A malformed override raises rather than silently falling back:
     a project that tried to declare its partitions and got them wrong should
-    hear about it, not get somebody else's taxonomy.
+    hear about it, not get somebody else's taxonomy. (The verification gate
+    degrades to a note in the same situation, because it still has real work to
+    do without its overrides. Writing memory has no equivalent "carry on
+    regardless": the write itself is the thing that would be wrong.)
+
+    Raises ``ValueError`` when the file is not JSON, and ``TypeError`` when it is
+    JSON of the wrong shape.
     """
     path = Path(root) / DOMAINS_PATH
     if not path.is_file():
@@ -405,7 +411,7 @@ def load_domain_map(root: str | Path = ".") -> DomainMap:
     except json.JSONDecodeError as exc:
         raise ValueError(f"{path} is not valid JSON: {exc}") from exc
     if not isinstance(data, dict):
-        raise ValueError(f"{path} must contain an object")
+        raise TypeError(f"{path} must contain an object")
     declared = _domains_from_dict(data, str(path))
     if str(data.get("extends", "")).lower() == "default":
         return DEFAULT_DOMAINS.extended_with(declared)

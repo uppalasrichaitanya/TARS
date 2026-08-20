@@ -198,6 +198,18 @@ def test_a_malformed_override_says_which_file_is_wrong(tmp_path) -> None:
         load_domain_map(tmp_path)
 
 
+def test_an_override_of_the_wrong_shape_is_a_type_error(tmp_path) -> None:
+    # Split deliberately: a file that isn't JSON is a ValueError, a file that is
+    # JSON of the wrong shape is a TypeError. Both raise rather than falling
+    # back to the default map — a project that tried to declare its partitions
+    # and got them wrong must not silently start writing into somebody else's.
+    path = tmp_path / ".tars" / "memory" / "domains.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"domains": ["billing"]}))
+    with pytest.raises(TypeError, match="domains.json"):
+        load_domain_map(tmp_path)
+
+
 def test_an_override_with_an_unusable_domain_name_is_refused(tmp_path) -> None:
     path = tmp_path / ".tars" / "memory" / "domains.json"
     path.parent.mkdir(parents=True)
