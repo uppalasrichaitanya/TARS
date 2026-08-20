@@ -157,6 +157,17 @@ def test_a_candidate_serialises_with_its_disposition_and_evidence() -> None:
     assert data["signals"] == ["decision-cue"]
 
 
+def test_a_candidate_round_trips_through_its_dict_form() -> None:
+    # The review queue is a file. A candidate that can't come back from JSON is
+    # a candidate a human can never approve, which makes the queue a dead end.
+    cand = candidate(
+        evidence=(Evidence(turn=2, role="assistant", quote="going with stdlib http"),),
+        signals=("decision-cue",),
+        supersedes=("decision-deadbeef",),
+    )
+    assert Candidate.from_dict(cand.to_dict()) == cand
+
+
 # ── MemoryEntry ───────────────────────────────────────────────────────────
 
 

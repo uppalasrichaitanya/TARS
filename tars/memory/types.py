@@ -184,6 +184,25 @@ class Candidate:
             "supersedes": list(self.supersedes),
         }
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Candidate:
+        """Rebuild a candidate from its serialised form.
+
+        `disposition` is not read back: it is derived from the confidence and the
+        kind, so a hand-edited queue file cannot promote an entry by changing one
+        word. Approving something is an action a human takes, not a field.
+        """
+        return cls(
+            text=str(data["text"]),
+            kind=data["kind"],
+            domains=tuple(data.get("domains", ())),
+            why=str(data.get("why", "")),
+            confidence=float(data.get("confidence", 0.0)),
+            evidence=tuple(Evidence.from_dict(e) for e in data.get("evidence", ())),
+            signals=tuple(data.get("signals", ())),
+            supersedes=tuple(data.get("supersedes", ())),
+        )
+
 
 def _entry_id(kind: str, text: str) -> str:
     """A stable id derived from content.
