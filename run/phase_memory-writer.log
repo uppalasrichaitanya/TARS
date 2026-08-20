@@ -1,0 +1,86 @@
+memory-writer — phase report
+
+RECONSTRUCTED, and it matters that you know that. The original report for this
+phase does not exist: `run_claude` truncates the phase log on every retry, this
+phase failed twice (07:15, 07:30) and was interrupted mid-way through its third
+attempt, so whatever it had to say went with it. Everything below was verified
+directly against the tree afterwards rather than copied from that agent's
+account — the commits are its work, the numbers and the live check are not.
+
+
+WHAT IS THERE
+
+Nine modules under `tars/memory/`, 3090 lines, committed across
+fa912fa..68bdf5f:
+
+  types.py       the schema PHASE 6's rules imply — the four kinds, the two
+                 thresholds, and the dispositions
+  transcript.py  a reader that preserves whose voice a turn was in, because
+                 "the user said we must" and "I decided we must" are not the
+                 same claim
+  domains.py     tagging from markers that actually appear in the text, plus a
+                 project-supplied map at `.tars/memory/domains.json`
+  signals.py     cue detectors for the four memory-worthy kinds
+  propose.py     the REFLECT pass: transcript in, scored candidates out
+  store.py       partitioned JSON, a review queue, and marks rather than deletes
+  cli.py         `tars-memory` — reflect / recall / pending / approve / reject
+  __init__.py    the package surface: reflect_on, remember, recall
+
+Nothing is half-written; the tree was clean at the interruption, so the third
+attempt's last act (68bdf5f, 07:43) was a commit rather than an edit.
+
+
+VERIFICATION
+
+  memory tests          277 passed
+  whole suite           848 passed, 2 skipped
+  ruff / format / mypy  clean on every file in tars/memory
+
+Benchmark against a hand-labelled corpus of 76 statements (45 memory-worthy, 31
+not), every floor met:
+
+  detector precision  0.93   (floor 0.80)
+  detector recall     0.87   (floor 0.70)
+  kind accuracy       0.97   (floor 0.85)
+  store precision     1.00   (floor 0.80)
+  store recall        0.87
+
+The scorecard names its 6 misses, 3 false positives and 1 wrong-kind case rather
+than reporting a single number. `python tests/test_memory_benchmark.py` prints
+it.
+
+Live end-to-end check, run by hand on a four-turn transcript rather than trusted
+from the tests: `reflect` produced one commit-grade and one review-grade
+candidate with per-signal score breakdowns, and correctly dropped both "ran the
+tests, all passed" and a question. `--write` partitioned into
+`.tars/memory/{providers,build,pending}.json`; `pending`, `recall --domain
+providers`, `approve` and `reject` all behave as documented, and the exit codes
+(0 ok, 1 needs a human, 2 usage, 3 nothing memory-worthy) are real.
+
+Against PHASE 6's rules specifically: domains are tagged only from explicit
+evidence, superseded entries are marked and stay readable but stop coming back
+from `recall`, low-confidence candidates go to a queue `recall` cannot see, and
+an empty report says so instead of reaching for something. All four are covered
+by tests.
+
+
+WHAT THE PHASE DID NOT DO, AND WHAT WAS DONE ABOUT IT
+
+  - No checkpoint commit. Added now.
+  - No entry in run/summary.log. Added now.
+  - README.md left stale: it documented neither `tars-memory` nor the module.
+    Regenerated with the tool itself; `tars-readme . --check` now exits 0.
+  - Console scripts were declared in pyproject but never installed, so
+    `tars-memory` did not exist as a command and the CLI's own help told you to
+    run `tars-memory approve <ID>`. `pip install -e .` fixed that; all three
+    commands now resolve.
+
+
+WHAT IS STILL MISSING FROM THIS MODULE
+
+Semantic recall. The spec's memory section asks for the existing vector DB on
+the embedded side with JSON or SQLite for the structured side; only the
+structured side was built. `recall` matches on domain and kind exactly, so
+ORIENT cannot ask "what do we know that is *related* to this task". That is a
+real gap against the spec, not an oversight in the code that exists, and it is
+big enough to be its own phase.

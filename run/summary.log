@@ -72,3 +72,50 @@ never the differentiator between them.
 [05:35:43]   call failed (exit 1), attempt 1/8 — retrying in 30s. See /home/chaitanya/TARS/run/phase_router-classifier.log
 [05:48:34]   (succeeded on retry attempt 2)
 [05:48:34] Phase 'router-classifier' finished. Committing checkpoint.
+[05:48:39] ── Foundation phase: memory-writer ──
+[07:15:07]   call failed (exit 1), attempt 1/8 — retrying in 30s. See /home/chaitanya/TARS/run/phase_memory-writer.log
+[07:30:33]   call failed (exit 1), attempt 2/8 — retrying in 60s. See /home/chaitanya/TARS/run/phase_memory-writer.log
+
+=== 15:40 MANUAL SESSION (interactive, not overnight_build.sh) ===
+The memory-writer phase was interrupted mid-third-attempt; the run did not
+continue past it. Picked up by hand from there. Nothing was restarted.
+
+memory-writer — CLOSED OUT. All work was already committed (fa912fa..68bdf5f);
+  277 tests pass, ruff/format/mypy clean, benchmark floors met. Its phase report
+  was lost to log truncation and has been reconstructed from the tree — see
+  run/phase_memory-writer.log, which says so at the top. README regenerated.
+  Still missing vs the spec: semantic recall (vector DB side). Its own phase.
+
+agentrouter — NEW, commit e882893. AgentRouter's Claude surface as a first-class
+  provider: agentrouter:claude-opus-5. Anthropic wire format, bearer token,
+  refuses a /v1 base URL up front. Live-verified: plain completion and a full
+  tool round-trip. Found in the process: AgentRouter admits only clients it
+  whitelists — curl and the openai SDK both get 401 unauthorized_client_error
+  with a valid key, the anthropic SDK does not — so it must go through the SDK,
+  not raw HTTP. The GPT-5.6 path is blocked on a second key that is not on this
+  machine; tried once, left alone, nothing stubbed.
+
+router-classifier — FIXED, commit 6504600. The phase had been checkpointed as
+  finished with no tars/router/ at all, only a test importing it. That broken
+  import failed collection for the entire suite, so pytest exited 2 with zero
+  tests run and tars-verify reported FAIL for a reason unrelated to any code.
+  Built to the 13 tests it left behind. 48 labelled cases + rubric, cue-based
+  classifier, confusion matrix per split. tier 1.00/1.00, blast 0.88/0.92,
+  reversibility 1.00/1.00 — and the holdout is structural, not unseen, because
+  corpus and cues were authored together. The benchmark docstring says so.
+
+  WHOLE SUITE NOW RUNS WITH NO EXCLUSIONS: 848 passed, 2 skipped.
+
+Also: pip install -e . (the three console scripts existed only as python -m
+  before this); labeled_tasks.json declared as package-data and confirmed
+  present in a real wheel; .gitignore now covers build/, dist/ and .env —
+  python -m build leaves a source copy in build/ and this script commits with
+  git add -A.
+
+STILL NEEDS YOU:
+  (1) provider A-vs-B, unchanged since 03:42. Every remaining ruff (14),
+      format (8 files) and mypy (1) failure is in tars/providers/* — the exact
+      files the rival branch rewrites. Nothing else in the repo is dirty.
+  (2) loop-orchestrator + the tars CLI. Not started, not designed. Agreed to
+      plan this one together before building it.
+  (3) browser-test-efficient, and semantic recall for memory. Both real phases.

@@ -3,3 +3,22 @@ __pycache__/
 *.pyc
 .pytest_cache/
 *.egg-info/
+
+# Build artifacts. `python -m build` leaves a full copy of the source tree in
+# build/, which ruff and mypy then walk as if it were real code. Worth ignoring
+# on its own, and worth ignoring twice because overnight_build.sh checkpoints
+# with `git add -A`.
+build/
+dist/
+
+# Credentials. Nothing here reads a .env today — the provider adapters take
+# their tokens from the environment — but `git add -A` means a stray one would
+# be committed on the next checkpoint, and an AgentRouter key is a live secret.
+.env
+.env.*
+!.env.example
+
+# Tool caches that write their own ignore files, listed anyway so a fresh
+# checkout on a machine with older tooling behaves the same.
+.ruff_cache/
+.mypy_cache/
