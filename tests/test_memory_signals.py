@@ -139,6 +139,13 @@ def test_deciding_against_something_reads_as_rejected() -> None:
     assert kind("Decided against bolting on Qdrant.") == "rejected"
 
 
+def test_dropping_something_already_in_use_reads_as_rejected() -> None:
+    # The phrasing a mid-project reversal actually takes. It has to carry a cue
+    # of its own, or the supersede machinery has nothing to attach to: a
+    # statement with no kind never becomes a candidate at all.
+    assert kind("We no longer use the openai SDK for that path.") == "rejected"
+
+
 def test_a_non_obvious_cause_reads_as_a_gotcha() -> None:
     assert kind("Turns out the formatter rewrites README fences too.") == "gotcha"
 

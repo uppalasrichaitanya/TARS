@@ -120,6 +120,12 @@ _CUES: tuple[tuple[str, str, float, str], ...] = (
         r"\b(?:won't|will not|not going to) (?:use|be using|add)\b",
     ),
     ("dropped-approach", "rejected", 0.48, r"\bdropped the (?:idea|approach|plan)\b"),
+    (
+        "no-longer",
+        "rejected",
+        0.46,
+        r"\bno longer (?:use|uses|using|need|needs|call)\b",
+    ),
     ("backed-out", "rejected", 0.46, r"\b(?:backed out|reverted) (?:of |the )?\b"),
     ("avoid-using", "rejected", 0.44, r"\bavoid(?:ed|ing)? (?:using|adding)\b"),
     (
