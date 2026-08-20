@@ -17,6 +17,7 @@ recognised even though it is perfectly true.
 from __future__ import annotations
 
 from tars.memory.signals import (
+    ephemeral_markers,
     kind_of,
     read_signals,
     reason_clause,
@@ -175,6 +176,55 @@ def test_a_passing_test_run_is_not_any_kind() -> None:
 
 def test_a_question_is_not_a_fact() -> None:
     assert kind("Should we use sqlite or postgres here?") is None
+
+
+def test_a_retraction_is_not_a_fact_either() -> None:
+    # "Never mind" is a discourse marker, not the constraint word `never`. A
+    # retraction withdraws a claim, so — exactly like a question — there is no
+    # claim left to be confident about, and the veto belongs at the same place.
+    assert kind("Never mind, that was my mistake.") is None
+
+
+def test_a_retraction_is_vetoed_however_it_is_phrased() -> None:
+    for text in (
+        "Scratch that, we are keeping the stdlib client.",
+        "Ignore that last one, I misread the file.",
+        "Disregard the previous message.",
+        "Never mind — `os.replace` was already atomic.",
+        "Actually no, that was wrong: the token is read from the env.",
+    ):
+        assert kind(text) is None, text
+
+
+def test_withdrawing_a_claim_is_not_the_same_as_never_using_something() -> None:
+    # The veto must not swallow the strongest constraint there is.
+    assert kind("Never commit ANTHROPIC_AUTH_TOKEN to the repo.") == "constraint"
+    assert kind("We never call the provider layer from this phase.") == "constraint"
+
+
+def test_a_rule_that_expires_with_the_session_is_not_memory_worthy() -> None:
+    # Memory-worthy means "would change how a FUTURE session behaves". A rule
+    # scoped to this evening cannot, however imperative its grammar.
+    for text in (
+        "This has to be the last commit tonight.",
+        "We have to stop for today after this one.",
+        "Everything else has to wait until tomorrow.",
+        "This must be finished before I go to bed.",
+    ):
+        assert ephemeral_markers(text), text
+
+
+def test_a_durable_rule_is_not_marked_ephemeral() -> None:
+    assert not ephemeral_markers("Never commit ANTHROPIC_AUTH_TOKEN to the repo.")
+    assert not ephemeral_markers("The store must never return a pending entry.")
+    assert not ephemeral_markers("Domain names have to be usable as file names.")
+
+
+def test_a_lasting_decision_reached_tonight_survives_the_ephemeral_veto() -> None:
+    # The scope word has to be doing scope work. "Tonight we settled on X" dates
+    # a decision; it does not put an expiry on it.
+    assert not ephemeral_markers("Tonight we settled on sqlite for the run log.")
+    assert kind("Tonight we settled on sqlite for the run log.") == "decision"
 
 
 def test_routine_work_is_marked_even_when_it_wears_a_decision_verb() -> None:

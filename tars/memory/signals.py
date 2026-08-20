@@ -2,11 +2,11 @@
 
 Memory-worthy: "a decision, a constraint, a rejected approach, a non-obvious
 gotcha". Not memory-worthy: "routine execution, anything visible by just reading
-the code". This file turns that into cue tables and three vetoes, and nothing
-here is clever — every match is a literal phrase a person actually writes, kept
-in one place so the corpus can argue with it.
+the code". This file turns that into cue tables and the vetoes next to them, and
+nothing here is clever — every match is a literal phrase a person actually
+writes, kept in one place so the corpus can argue with it.
 
-Two design notes worth knowing before changing anything:
+Three design notes worth knowing before changing anything:
 
 **Cues carry weights, and the strongest cue per kind wins.** Summing would let a
 verbose sentence out-score a precise one. A cue can also fire for two kinds at
@@ -18,6 +18,12 @@ reading the code.
 **Routine detection has to survive decision grammar.** "I decided to run the
 formatter" carries a decision verb and means nothing. Every cue table in this
 file is worthless without the routine veto next to it.
+
+**A veto is not a low score.** Three shapes of statement fire no cue at all — a
+question, a retraction, and a rule that expires with the session — because none
+of them makes a claim about the project that could be more or less true. Routine
+narration and hedges score instead of vetoing, since those *are* claims, just
+ones a reviewer should see ranked last rather than never.
 """
 
 from __future__ import annotations
@@ -185,6 +191,59 @@ _ROUTINE: tuple[str, ...] = (
 )
 
 _COMPILED_ROUTINE = tuple(re.compile(p, re.IGNORECASE) for p in _ROUTINE)
+
+#: Withdrawals. A retraction takes a claim back, so — exactly like a question —
+#: there is no claim left to be confident about, and the veto belongs in the same
+#: place for the same reason.
+#:
+#: Two absences are deliberate. "I was wrong about X" is not here: a correction
+#: replaces a claim with a better one, and the better one is usually the most
+#: memory-worthy sentence in the transcript. And the phrases that take an object
+#: require that object to be a previous utterance ("ignore that *last* one"),
+#: because a bare "ignore the lockfile" is a constraint, and vetoing it would
+#: throw away the strongest kind of entry there is.
+_RETRACTION: tuple[str, ...] = (
+    r"\bnever mind\b",
+    r"\b(?:scratch|strike) that\b",
+    (
+        r"\b(?:ignore|disregard|forget) (?:that|this|the|my) "
+        r"(?:last|previous|prior|earlier)\b"
+    ),
+    r"\bforget what I (?:said|wrote)\b",
+    # Not "actually no longer use X", which is a supersede and worth keeping.
+    r"\bactually,?\s+no\b(?!\s+\w)",
+)
+
+_COMPILED_RETRACTION = tuple(re.compile(p, re.IGNORECASE) for p in _RETRACTION)
+
+#: Rules that expire when the session does. Memory-worthy means "would change
+#: how a FUTURE session behaves", and "this has to be the last commit tonight"
+#: cannot, however imperative its grammar — by tomorrow there is nothing left to
+#: obey. So this is a veto, not a penalty: it isn't a weak claim about the
+#: project, it is not a claim about the project at all.
+#:
+#: Every pattern requires the time word to be doing scope work. A bare "tonight"
+#: is not enough, because "tonight we settled on sqlite" only *dates* a decision
+#: — it puts no expiry on it.
+_EPHEMERAL: tuple[str, ...] = (
+    r"\blast (?:\w+ ){0,2}(?:tonight|today|this session|this run)\b",
+    r"\bstop (?:for|at) (?:tonight|today|now|the (?:day|night|evening))\b",
+    (
+        r"\bwait (?:until|till|for) "
+        r"(?:tomorrow|the morning|next (?:session|run|time)|later)\b"
+    ),
+    (
+        r"\bbefore (?:I|we) "
+        r"(?:go to bed|sleep|call it a night|stop for the (?:day|night))\b"
+    ),
+    r"\b(?:rest|remainder) of (?:tonight|today|this session)\b",
+    (
+        r"\bpick (?:this|it|that) up (?:again )?"
+        r"(?:tomorrow|in the morning|next session)\b"
+    ),
+)
+
+_COMPILED_EPHEMERAL = tuple(re.compile(p, re.IGNORECASE) for p in _EPHEMERAL)
 
 #: Hedges. Not a veto — a hedged gotcha is often the most valuable thing in a
 #: transcript — but a hedge is the transcript saying "don't bank on this yet",
@@ -384,11 +443,14 @@ def segment(turn: Turn) -> tuple[Statement, ...]:
 def read_signals(text: str) -> tuple[Signal, ...]:
     """Every cue that fires on `text`, with what matched.
 
-    A question fires nothing at all. The veto belongs here rather than in the
-    scorer because a question is not low-confidence evidence for a claim — there
-    is no claim to be confident about.
+    Three kinds of statement fire nothing at all: a question, a retraction, and a
+    rule scoped to this session. The vetoes belong here rather than in the scorer
+    because none of them is low-confidence evidence for a claim — a question has
+    no claim yet, a retraction has taken its claim back, and a rule that expires
+    tonight makes no claim about the project. Scoring them low would still leave
+    them in the queue for a human to read and reject one at a time.
     """
-    if is_question(text):
+    if is_question(text) or retraction_markers(text) or ephemeral_markers(text):
         return ()
     found: list[Signal] = []
     for name, kind, weight, pattern in _COMPILED_CUES:
@@ -436,6 +498,16 @@ def _matches(patterns: tuple[re.Pattern[str], ...], text: str) -> tuple[str, ...
 def routine_markers(text: str) -> tuple[str, ...]:
     """Phrases that mark this as routine execution or code narration."""
     return _matches(_COMPILED_ROUTINE, text)
+
+
+def ephemeral_markers(text: str) -> tuple[str, ...]:
+    """Phrases that scope a statement to this session rather than the project."""
+    return _matches(_COMPILED_EPHEMERAL, text)
+
+
+def retraction_markers(text: str) -> tuple[str, ...]:
+    """Phrases that withdraw a claim instead of making one."""
+    return _matches(_COMPILED_RETRACTION, text)
 
 
 def weak_markers(text: str) -> tuple[str, ...]:
