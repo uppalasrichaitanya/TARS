@@ -24,6 +24,10 @@ dev = ["anthropic>=0.40", "openai>=1.40", "pytest>=8"]
 tars-verify = "tars.verification.cli:main"
 # Same for the readme writer: `python -m tars.readme` is the same entry point.
 tars-readme = "tars.readme.cli:main"
+# The memory writer, likewise. It ships as a command because draining the review
+# queue is a thing a person does between loop runs, not something the loop can do
+# for itself.
+tars-memory = "tars.memory.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["tars*"]
