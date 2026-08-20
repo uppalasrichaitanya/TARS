@@ -28,8 +28,9 @@ from .errors import UnknownProviderError
 ANTHROPIC = "anthropic"
 OPENAI = "openai"
 OPENROUTER = "openrouter"
+AGENTROUTER = "agentrouter"
 
-KNOWN_PROVIDERS: tuple[str, ...] = (ANTHROPIC, OPENAI, OPENROUTER)
+KNOWN_PROVIDERS: tuple[str, ...] = (ANTHROPIC, OPENAI, OPENROUTER, AGENTROUTER)
 
 # Bare-name patterns for the two direct-SDK providers.
 _ANTHROPIC_BARE = re.compile(r"^claude[-_.]", re.IGNORECASE)
@@ -113,6 +114,7 @@ def reset_providers() -> None:
 
 
 def _default_factories() -> None:
+    from .agentrouter_provider import AgentRouterProvider
     from .anthropic_provider import AnthropicProvider
     from .openai_provider import OpenAIProvider
     from .openrouter_provider import OpenRouterProvider
@@ -120,9 +122,10 @@ def _default_factories() -> None:
     register_provider(ANTHROPIC, AnthropicProvider)
     register_provider(OPENAI, OpenAIProvider)
     register_provider(OPENROUTER, OpenRouterProvider)
+    register_provider(AGENTROUTER, AgentRouterProvider)
 
 
 def install_default_providers() -> None:
-    """Register the three built-in adapters if nothing is registered yet."""
+    """Register the four built-in adapters if nothing is registered yet."""
     if not _FACTORIES:
         _default_factories()

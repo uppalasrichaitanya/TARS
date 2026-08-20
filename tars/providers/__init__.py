@@ -1,6 +1,6 @@
 """TARS provider adapter layer.
 
-One interface, three providers:
+One interface, four providers:
 
     from tars.providers import Message, ToolDef, generate
 
@@ -15,6 +15,11 @@ Routing is by model string: ``claude-*`` uses the Anthropic SDK, ``gpt-*``/
 ``o3``-style uses the OpenAI SDK, everything else goes to OpenRouter over plain
 HTTP. Prefix a model with ``openrouter/`` to force it through OpenRouter, or
 ``anthropic/`` / ``openai/`` to be explicit.
+
+``agentrouter:claude-opus-5`` routes to AgentRouter, which serves the Anthropic
+Messages API at its own host under a bearer token. It is reachable only by an
+explicit prefix — a bare ``claude-*`` keeps going to Anthropic, so adding it
+re-routes nothing that already worked.
 
 Loop code should import only from this module. If you find yourself reaching for
 `response.raw` or a provider class directly, that's the signal a provider quirk
@@ -35,6 +40,7 @@ from .errors import (
     UnknownProviderError,
 )
 from .registry import (
+    AGENTROUTER,
     ANTHROPIC,
     KNOWN_PROVIDERS,
     OPENAI,
@@ -61,6 +67,7 @@ from .types import (
 DEFAULT_MODEL = "claude-opus-5"
 
 __all__ = [
+    "AGENTROUTER",
     "ANTHROPIC",
     "DEFAULT_MAX_TOKENS",
     "DEFAULT_MODEL",
