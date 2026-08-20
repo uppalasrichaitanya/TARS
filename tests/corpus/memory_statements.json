@@ -1,0 +1,342 @@
+{
+  "note": [
+    "Hand-labelled statements for the memory writer's benchmark.",
+    "",
+    "`expect` is the kind a person would file the statement under, a list when a",
+    "person could reasonably file it under either, and null when the statement is",
+    "not memory-worthy at all. The labels come from core directive 4 — a decision,",
+    "a constraint, a rejected approach, a non-obvious gotcha, and nothing else —",
+    "not from reading the cue tables. Statements that carry no cue phrase at all",
+    "are deliberately included and deliberately labelled as memory-worthy: the",
+    "point of a corpus is to measure what the detector misses, and one written to",
+    "match the detector measures nothing.",
+    "",
+    "Machine output, tracebacks and fenced code are not here. Those never reach a",
+    "detector, because `segment` drops them a step earlier, and the transcript",
+    "tests are where that belongs."
+  ],
+  "statements": [
+    {
+      "text": "We decided to use stdlib http in `tars/providers/base.py` rather than adding httpx.",
+      "expect": "decision",
+      "note": "explicit choice, alternative named"
+    },
+    {
+      "text": "Going with sqlite for the run log; postgres is more than this needs.",
+      "expect": "decision"
+    },
+    {
+      "text": "The convention here is one commit per module, so partial progress survives an interrupted run.",
+      "expect": "decision"
+    },
+    {
+      "text": "From now on every phase appends its own block to `run/summary.log`.",
+      "expect": "decision"
+    },
+    {
+      "text": "We settled on 88 columns to match ruff's default rather than arguing about it.",
+      "expect": "decision"
+    },
+    {
+      "text": "Standardised on `from __future__ import annotations` at the top of every module.",
+      "expect": "decision"
+    },
+    {
+      "text": "I chose to keep the scorer deterministic so two runs over one transcript can be compared byte for byte.",
+      "expect": "decision"
+    },
+    {
+      "text": "Switching to `os.replace` for store writes so an interrupted run cannot leave a truncated partition.",
+      "expect": "decision"
+    },
+    {
+      "text": "We agreed that the review queue is one file rather than one per domain.",
+      "expect": "decision"
+    },
+    {
+      "text": "Prefer `propose` over the CLI for anything programmatic.",
+      "expect": "decision"
+    },
+    {
+      "text": "The confidence thresholds live in `types.py`, not at the call sites.",
+      "expect": "decision",
+      "note": "a stated convention with no cue phrase at all"
+    },
+    {
+      "text": "Domain tags come from explicit evidence in the text, never from inference.",
+      "expect": ["decision", "constraint"],
+      "note": "a design rule; a person could file it either way"
+    },
+    {
+      "text": "The store must never return a pending entry from recall.",
+      "expect": "constraint"
+    },
+    {
+      "text": "Domain names have to be usable as file names, so `../etc` is refused rather than sanitised.",
+      "expect": "constraint"
+    },
+    {
+      "text": "This only works if the venv is activated; there is no system python with the deps.",
+      "expect": "constraint"
+    },
+    {
+      "text": "Never commit ANTHROPIC_AUTH_TOKEN to the repo.",
+      "expect": "constraint"
+    },
+    {
+      "text": "Do not import `tars.providers` from this phase.",
+      "expect": "constraint"
+    },
+    {
+      "text": "Writing to `.tars/memory` requires the directory to be inside the repo root.",
+      "expect": "constraint"
+    },
+    {
+      "text": "A candidate with no domain tag can never auto-commit, however confident it is.",
+      "expect": "constraint"
+    },
+    {
+      "text": "Entries always carry the turn they were read out of.",
+      "expect": "constraint"
+    },
+    {
+      "text": "The overnight script has no lockfile, so a second launch must not be started while one is running.",
+      "expect": "constraint"
+    },
+    {
+      "text": "The Claude path is the only provider with working credentials on this machine.",
+      "expect": ["constraint", "gotcha"],
+      "note": "a hard limit on what can run here, stated with no cue phrase"
+    },
+    {
+      "text": "Every candidate needs a domain tag or ORIENT can never retrieve it.",
+      "expect": "constraint",
+      "note": "\"needs\" rather than \"requires\" — the same rule in ordinary words"
+    },
+    {
+      "text": "Ruled out an LLM-based proposer: the provider layer is contested and this has to run in isolation.",
+      "expect": "rejected"
+    },
+    {
+      "text": "We decided against embedding retrieval; domain partitions are a directory listing.",
+      "expect": "rejected"
+    },
+    {
+      "text": "We are not going to use httpx in this phase.",
+      "expect": "rejected"
+    },
+    {
+      "text": "Backed out of the shared base class; two providers did not justify it.",
+      "expect": "rejected"
+    },
+    {
+      "text": "No longer using the openai SDK for OpenRouter.",
+      "expect": "rejected"
+    },
+    {
+      "text": "Dropped the idea of an index file — the directory listing is the index.",
+      "expect": "rejected"
+    },
+    {
+      "text": "Avoided adding a lockfile: the failure it prevents is rarer than the confusion it causes.",
+      "expect": "rejected"
+    },
+    {
+      "text": "Tried tagging domains by inference and it broke on cross-cutting entries, so that is out.",
+      "expect": "rejected"
+    },
+    {
+      "text": "Tried tagging domains by inference and it produced entries nobody had asked for, so that is out.",
+      "expect": "rejected",
+      "note": "the same rejection written without a failure verb the tables know"
+    },
+    {
+      "text": "postgres was overkill for a run log, so sqlite it is.",
+      "expect": ["rejected", "decision"],
+      "note": "a rejection stated only by the word \"overkill\""
+    },
+    {
+      "text": "It turns out `ruff format` rewrites long lines in test files too, so run it before committing.",
+      "expect": "gotcha"
+    },
+    {
+      "text": "The verification gate silently treats an unavailable check as a pass.",
+      "expect": "gotcha"
+    },
+    {
+      "text": "Beware: `tars-verify` exits 1 on this repo for reasons that predate any change you make.",
+      "expect": "gotcha"
+    },
+    {
+      "text": "The catch is that `os.replace` is only atomic within one filesystem.",
+      "expect": "gotcha"
+    },
+    {
+      "text": "The root cause was the lone-token rule swallowing any line that ends in a colon.",
+      "expect": "gotcha"
+    },
+    {
+      "text": "`sed` with the wrong indentation silently does nothing, which made a real test hole look like a passing guard.",
+      "expect": "gotcha"
+    },
+    {
+      "text": "Surprisingly, `parse_text` numbers turns from 1 rather than 0.",
+      "expect": "gotcha"
+    },
+    {
+      "text": "Easy to miss: the pending queue is one file, not one per domain.",
+      "expect": "gotcha"
+    },
+    {
+      "text": "Fails without the venv activated: `python` is not on PATH here.",
+      "expect": "gotcha"
+    },
+    {
+      "text": "The caveat is that `--max` silently caps a long transcript, so the note names what was cut.",
+      "expect": "gotcha"
+    },
+    {
+      "text": "A transcript with no phase headings scores lower than the same text with them.",
+      "expect": "gotcha",
+      "note": "non-obvious behaviour of this project's own scorer, stated flatly"
+    },
+    {
+      "text": "`json.dumps` with sort_keys is what makes two writes byte-identical; without it the diff is noise.",
+      "expect": "gotcha",
+      "note": "a real gotcha with no cue phrase"
+    },
+    {
+      "text": "Ran the tests. 461 passed.",
+      "expect": null,
+      "note": "routine execution"
+    },
+    {
+      "text": "Reformatted the file with ruff.",
+      "expect": null
+    },
+    {
+      "text": "Committed as `checkpoint: router-classifier`.",
+      "expect": null
+    },
+    {
+      "text": "Let me read the spec first.",
+      "expect": null
+    },
+    {
+      "text": "Now I'll write the test file.",
+      "expect": null
+    },
+    {
+      "text": "Added a helper to split sentences on abbreviations.",
+      "expect": null
+    },
+    {
+      "text": "Renamed `_check` to `_check_name`.",
+      "expect": null
+    },
+    {
+      "text": "Extracted the cue tables into a module-level constant.",
+      "expect": null
+    },
+    {
+      "text": "Wrote the tests for the store.",
+      "expect": null
+    },
+    {
+      "text": "Fixed a typo in the docstring.",
+      "expect": null
+    },
+    {
+      "text": "Installed pytest into the venv.",
+      "expect": null
+    },
+    {
+      "text": "Next, the CLI.",
+      "expect": null
+    },
+    {
+      "text": "Checking whether the file exists.",
+      "expect": null
+    },
+    {
+      "text": "All 46 tests pass now.",
+      "expect": null
+    },
+    {
+      "text": "I decided to run the formatter before committing.",
+      "expect": null,
+      "note": "decision grammar over routine work; the negative that matters most"
+    },
+    {
+      "text": "I always run the formatter before committing.",
+      "expect": null,
+      "note": "constraint grammar over routine work"
+    },
+    {
+      "text": "We must remember to re-run the tests after formatting.",
+      "expect": null,
+      "note": "a task, not a project constraint"
+    },
+    {
+      "text": "`MemoryStore.recall` returns a tuple of `MemoryEntry`.",
+      "expect": null,
+      "note": "visible by reading the code"
+    },
+    {
+      "text": "The module has four public functions.",
+      "expect": null
+    },
+    {
+      "text": "`Candidate` is a frozen dataclass with nine fields.",
+      "expect": null
+    },
+    {
+      "text": "The store writes JSON with indent=2.",
+      "expect": null
+    },
+    {
+      "text": "There are 45 tests in `test_memory_signals.py`.",
+      "expect": null
+    },
+    {
+      "text": "Should we use sqlite or postgres for the run log?",
+      "expect": null,
+      "note": "the grammar of a decision, none of its content"
+    },
+    {
+      "text": "Do we need a lockfile for the overnight script?",
+      "expect": null
+    },
+    {
+      "text": "Is `os.replace` atomic on Windows?",
+      "expect": null
+    },
+    {
+      "text": "What happens if two phases write at once?",
+      "expect": null
+    },
+    {
+      "text": "Maybe the retry backoff should be longer.",
+      "expect": null,
+      "note": "a hunch with nothing decided"
+    },
+    {
+      "text": "I think the domain map probably needs a billing partition.",
+      "expect": null
+    },
+    {
+      "text": "It seems like the scorer might be too generous with role weights.",
+      "expect": null
+    },
+    {
+      "text": "This has to be the last commit tonight.",
+      "expect": null,
+      "note": "session logistics wearing a constraint's grammar"
+    },
+    {
+      "text": "Never mind, that was my mistake.",
+      "expect": null,
+      "note": "\"never\" with nothing behind it"
+    }
+  ]
+}
