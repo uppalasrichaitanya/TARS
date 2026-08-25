@@ -13,7 +13,7 @@ from ..router import Classification
 from ._io import color_enabled, is_tty, paint
 from .engine import Engine
 from .session import Session
-from .types import RunPromptSpec
+from .types import RunPromptSpec, RunReport
 
 
 class EngineRunner(Protocol):
@@ -23,7 +23,7 @@ class EngineRunner(Protocol):
         session: Session,
         *,
         output: TextIO,
-    ) -> object: ...
+    ) -> RunReport: ...
 
 
 class InputStream(Protocol):
@@ -113,11 +113,12 @@ class Repl:
         if not task:
             self._write("usage: /run <task>\n")
             return
-        self.engine.run(
+        report = self.engine.run(
             RunPromptSpec(task, auto_confirm=self.session.auto_confirm),
             self.session,
             output=self.stdout,
         )
+        write_report(report, self.stdout)
 
     def _route(self, task: str) -> None:
         if not task:
@@ -171,3 +172,23 @@ class Repl:
 def _verdict(verdict: Classification) -> str:
     state = "reversible" if verdict.reversible else "not reversible"
     return f"tier {verdict.tier} · {verdict.blast} blast · {state}: {verdict.why}"
+
+
+def write_report(report: RunReport, stream: TextIO) -> None:
+    """Print REPORT without dropping its honest-detail fields."""
+    verified = (
+        "not run"
+        if report.verification_passed is None
+        else ("pass" if report.verification_passed else "fail")
+    )
+    stream.write("REPORT\n")
+    stream.write(f"task: {report.task}\n")
+    stream.write(f"verdict: {report.verdict or 'unknown'}\n")
+    stream.write(f"verification: {verified}\n")
+    stream.write(f"touched: {', '.join(report.touched) or 'none'}\n")
+    stream.write(
+        f"memory: proposed={report.proposed} committed={report.committed} "
+        f"queued={report.queued}\n"
+    )
+    stream.writelines(f"declined: {item}\n" for item in report.declined)
+    stream.writelines(f"uncertainty: {item}\n" for item in report.uncertainties)

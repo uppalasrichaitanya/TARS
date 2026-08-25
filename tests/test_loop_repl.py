@@ -6,6 +6,7 @@ from io import StringIO
 from pathlib import Path
 
 from tars.loop.session import Session
+from tars.loop.types import RunReport
 from tars.memory import Candidate, MemoryEntry, ReflectionReport
 from tars.router import Classification
 from tars.verification import GateReport
@@ -42,8 +43,17 @@ def test_repl_runs_engine_and_handles_unknown_command(tmp_path: Path) -> None:
     class FakeEngine:
         def run(self, spec, session, *, output):
             seen.append(spec.task)
-            output.write("REPORT: done\n")
-            return object()
+            return RunReport(
+                task=spec.task,
+                verdict="tier 1",
+                verification_passed=True,
+                touched=("a.py",),
+                proposed=3,
+                committed=1,
+                queued=2,
+                declined=("apply_edit: edit declined",),
+                uncertainties=("uncertainty verbatim",),
+            )
 
     repl = Repl(
         Session(root=tmp_path, model="fake"),
@@ -54,7 +64,12 @@ def test_repl_runs_engine_and_handles_unknown_command(tmp_path: Path) -> None:
     assert repl.run() == 0
     assert seen == ["fix it"]
     assert "unknown command" in out.getvalue()
-    assert "REPORT: done" in out.getvalue()
+    text = out.getvalue()
+    assert "task: fix it" in text
+    assert "touched: a.py" in text
+    assert "memory: proposed=3 committed=1 queued=2" in text
+    assert "declined: apply_edit: edit declined" in text
+    assert "uncertainty verbatim" in text
 
 
 def test_repl_handles_eof_and_ctrl_c_cleanly(tmp_path: Path) -> None:
