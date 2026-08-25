@@ -19,8 +19,8 @@ Routing rules, in order:
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from .base import Provider
 from .errors import UnknownProviderError

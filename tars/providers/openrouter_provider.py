@@ -21,8 +21,9 @@ import json
 import os
 import urllib.error
 import urllib.request
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any
 
 from ._openai_compat import (
     normalize_completion,
@@ -81,7 +82,9 @@ def urllib_transport(
 ) -> HTTPResponse:
     """Default transport: stdlib only, no third-party HTTP dependency."""
     data = json.dumps(body).encode("utf-8")
-    request = urllib.request.Request(url, data=data, headers=dict(headers), method="POST")
+    request = urllib.request.Request(
+        url, data=data, headers=dict(headers), method="POST"
+    )
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return _read(response.status, response.read())
@@ -167,7 +170,9 @@ class OpenRouterProvider(Provider):
         timeout = opts.timeout if opts.timeout is not None else DEFAULT_TIMEOUT_SECONDS
         response = self._post(body, timeout=timeout, model_id=model_id)
         payload = self._payload(response, model_id)
-        return normalize_completion(payload, provider=self.name, fallback_model=model_id)
+        return normalize_completion(
+            payload, provider=self.name, fallback_model=model_id
+        )
 
     # ── HTTP ─────────────────────────────────────────────────────────────
 
@@ -200,8 +205,11 @@ class OpenRouterProvider(Provider):
         for attempt in range(attempts):
             try:
                 response = self._transport(self._url, headers, body, timeout)
-            except Exception as exc:
+            except OSError as exc:
                 # No status at all: connection reset, DNS, timeout. Retryable.
+                # OSError is the right width — urllib.error.URLError,
+                # socket.timeout and ssl.SSLError all derive from it — and it
+                # deliberately does not swallow a TypeError from our own code.
                 last_error = translate_api_exception(
                     exc, provider=self.name, model=model_id
                 )
@@ -220,7 +228,12 @@ class OpenRouterProvider(Provider):
                 raise last_error
             self._sleep(self.backoff_seconds * (2**attempt))
 
-        raise last_error  # pragma: no cover - loop always returns or raises
+        # Unreachable: `attempts` is at least 1, and every iteration either
+        # returns or raises on the final attempt. Stated as an invariant rather
+        # than `raise last_error`, which mypy correctly reads as possibly None.
+        raise AssertionError(  # pragma: no cover - the loop always exits first
+            "openrouter retry loop exited without a response or an error"
+        )
 
     def _payload(self, response: HTTPResponse, model_id: str) -> Mapping[str, Any]:
         if response.json is None:

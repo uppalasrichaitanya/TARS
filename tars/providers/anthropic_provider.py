@@ -13,7 +13,8 @@ Translation notes that are easy to get wrong:
 from __future__ import annotations
 
 import os
-from typing import Any, Mapping, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 from .base import (
     GenerateOptions,
@@ -184,7 +185,9 @@ class AnthropicProvider(Provider):
             tool_calls=tuple(tool_calls),
             model=getattr(raw, "model", model_id) or model_id,
             provider=self.name,
-            stop_reason=_STOP_REASONS.get(getattr(raw, "stop_reason", None) or "", "other"),
+            stop_reason=_STOP_REASONS.get(
+                getattr(raw, "stop_reason", None) or "", "other"
+            ),
             usage=_to_usage(getattr(raw, "usage", None)),
             raw=raw,
         )
@@ -218,7 +221,9 @@ def _to_anthropic_messages(messages: Sequence[Message]) -> list[dict[str, Any]]:
         if msg.role == "user":
             if not msg.content:
                 raise ValueError("a user message must have content")
-            out.append({"role": "user", "content": [{"type": "text", "text": msg.content}]})
+            out.append(
+                {"role": "user", "content": [{"type": "text", "text": msg.content}]}
+            )
         elif msg.role == "assistant":
             blocks: list[dict[str, Any]] = []
             if msg.content:

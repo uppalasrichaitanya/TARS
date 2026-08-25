@@ -8,8 +8,9 @@ ever reaches loop code.
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Literal, Mapping, Sequence
+from typing import Any, Literal
 
 Role = Literal["system", "user", "assistant", "tool"]
 
@@ -112,7 +113,9 @@ class ToolDef:
 
     name: str
     description: str
-    parameters: Mapping[str, Any] = field(default_factory=lambda: {"type": "object", "properties": {}})
+    parameters: Mapping[str, Any] = field(
+        default_factory=lambda: {"type": "object", "properties": {}}
+    )
 
 
 @dataclass(frozen=True)

@@ -38,9 +38,9 @@ def test_require_messages_rejects_an_empty_history():
 
 
 def test_decode_arguments_accepts_a_json_string():
-    assert decode_arguments('{"path": "a.py"}', provider="openai", tool_name="read") == {
-        "path": "a.py"
-    }
+    assert decode_arguments(
+        '{"path": "a.py"}', provider="openai", tool_name="read"
+    ) == {"path": "a.py"}
 
 
 def test_decode_arguments_accepts_a_dict_unchanged():

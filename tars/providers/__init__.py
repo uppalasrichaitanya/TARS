@@ -28,7 +28,8 @@ is leaking upward.
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from .base import DEFAULT_MAX_TOKENS, GenerateOptions, Provider
 from .errors import (
@@ -71,13 +72,13 @@ __all__ = [
     "ANTHROPIC",
     "DEFAULT_MAX_TOKENS",
     "DEFAULT_MODEL",
-    "GenerateOptions",
     "KNOWN_PROVIDERS",
+    "OPENAI",
+    "OPENROUTER",
+    "GenerateOptions",
     "LLMResponse",
     "Message",
     "ModelRoute",
-    "OPENAI",
-    "OPENROUTER",
     "Provider",
     "ProviderAPIError",
     "ProviderError",

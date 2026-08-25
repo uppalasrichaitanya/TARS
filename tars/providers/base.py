@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import abc
 import json
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from .errors import ProviderAPIError, ProviderResponseError, is_retryable_status
 from .types import LLMResponse, Message, ToolDef

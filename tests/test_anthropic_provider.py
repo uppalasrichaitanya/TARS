@@ -33,7 +33,9 @@ def make_response(
             "type": "message",
             "role": "assistant",
             "model": model,
-            "content": content if content is not None else [{"type": "text", "text": "hi"}],
+            "content": content
+            if content is not None
+            else [{"type": "text", "text": "hi"}],
             "stop_reason": stop_reason,
             "stop_sequence": None,
             "usage": usage or {"input_tokens": 12, "output_tokens": 5},
@@ -94,7 +96,9 @@ def test_assistant_tool_calls_become_tool_use_blocks():
             Message.user("read a.py"),
             Message.assistant(
                 "on it",
-                tool_calls=[ToolCall(id="call_1", name="read_file", arguments={"path": "a.py"})],
+                tool_calls=[
+                    ToolCall(id="call_1", name="read_file", arguments={"path": "a.py"})
+                ],
             ),
             Message.tool_result("call_1", "contents"),
         ],
@@ -174,7 +178,10 @@ def test_tools_are_translated_to_anthropic_input_schema():
             ToolDef(
                 name="read_file",
                 description="Read a file",
-                parameters={"type": "object", "properties": {"path": {"type": "string"}}},
+                parameters={
+                    "type": "object",
+                    "properties": {"path": {"type": "string"}},
+                },
             )
         ],
         model="claude-opus-5",
@@ -183,7 +190,10 @@ def test_tools_are_translated_to_anthropic_input_schema():
         {
             "name": "read_file",
             "description": "Read a file",
-            "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}},
+            "input_schema": {
+                "type": "object",
+                "properties": {"path": {"type": "string"}},
+            },
         }
     ]
 
@@ -335,17 +345,26 @@ def test_cache_usage_is_carried_through():
 
 def test_refusal_stop_reason_is_preserved():
     prov, _ = provider(response=make_response(stop_reason="refusal", content=[]))
-    assert prov.generate([Message.user("hi")], model="claude-opus-5").stop_reason == "refusal"
+    assert (
+        prov.generate([Message.user("hi")], model="claude-opus-5").stop_reason
+        == "refusal"
+    )
 
 
 def test_max_tokens_stop_reason_is_preserved():
     prov, _ = provider(response=make_response(stop_reason="max_tokens"))
-    assert prov.generate([Message.user("hi")], model="claude-opus-5").stop_reason == "max_tokens"
+    assert (
+        prov.generate([Message.user("hi")], model="claude-opus-5").stop_reason
+        == "max_tokens"
+    )
 
 
 def test_unknown_stop_reason_becomes_other_rather_than_crashing():
     prov, _ = provider(response=make_response(stop_reason="pause_turn"))
-    assert prov.generate([Message.user("hi")], model="claude-opus-5").stop_reason == "other"
+    assert (
+        prov.generate([Message.user("hi")], model="claude-opus-5").stop_reason
+        == "other"
+    )
 
 
 def test_raw_response_is_attached_for_escape_hatch_access():
@@ -382,7 +401,9 @@ def test_bad_request_is_reported_as_not_retryable():
 
 
 def test_connection_errors_are_retryable_provider_api_errors():
-    prov, _ = provider(error=anthropic.APIConnectionError(request=_fake_httpx_request()))
+    prov, _ = provider(
+        error=anthropic.APIConnectionError(request=_fake_httpx_request())
+    )
     with pytest.raises(ProviderAPIError) as excinfo:
         prov.generate([Message.user("hi")], model="claude-opus-5")
     assert excinfo.value.retryable is True
@@ -407,7 +428,7 @@ def test_malformed_tool_input_is_a_response_error():
         input = "not-a-dict"
 
     class FakeResponse:
-        content = [FakeBlock()]
+        content = (FakeBlock(),)
         model = "claude-opus-5"
         stop_reason = "tool_use"
         usage = None

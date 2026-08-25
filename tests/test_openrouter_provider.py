@@ -164,7 +164,9 @@ def test_timeout_is_passed_to_the_transport():
 
 def test_text_response_is_normalized():
     prov, _ = provider(HTTPResponse(200, chat_response(content="the answer")))
-    resp = prov.generate([Message.user("hi")], model="meta-llama/llama-3.3-70b-instruct")
+    resp = prov.generate(
+        [Message.user("hi")], model="meta-llama/llama-3.3-70b-instruct"
+    )
     assert resp.text == "the answer"
     assert resp.provider == "openrouter"
     assert resp.model == "meta-llama/llama-3.3-70b-instruct"
@@ -184,7 +186,10 @@ def test_tool_calls_are_normalized_with_decoded_arguments():
                     {
                         "id": "c1",
                         "type": "function",
-                        "function": {"name": "read_file", "arguments": '{"path": "a.py"}'},
+                        "function": {
+                            "name": "read_file",
+                            "arguments": '{"path": "a.py"}',
+                        },
                     }
                 ],
             ),
@@ -239,7 +244,9 @@ def test_rate_limit_is_retried_then_succeeds():
 
 
 def test_retries_are_bounded_and_the_last_failure_is_raised():
-    prov, transport = provider(HTTPResponse(503, {"error": {"message": "unavailable"}}), max_retries=2)
+    prov, transport = provider(
+        HTTPResponse(503, {"error": {"message": "unavailable"}}), max_retries=2
+    )
     with pytest.raises(ProviderAPIError) as excinfo:
         prov.generate([Message.user("hi")], model="mistralai/mistral-large")
     assert excinfo.value.status_code == 503

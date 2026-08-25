@@ -6,8 +6,15 @@ themselves are tested in their own files.
 
 import pytest
 
-import tars.providers as providers
-from tars.providers import GenerateOptions, LLMResponse, Message, ToolDef, Usage, generate
+from tars import providers
+from tars.providers import (
+    GenerateOptions,
+    LLMResponse,
+    Message,
+    ToolDef,
+    Usage,
+    generate,
+)
 from tars.providers.base import Provider
 from tars.providers.errors import UnknownProviderError
 from tars.providers.registry import get_provider, register_provider, reset_providers
@@ -22,7 +29,12 @@ class SpyProvider(Provider):
 
     def generate(self, messages, tools=None, model=None, options=None):
         self.calls.append(
-            {"messages": list(messages), "tools": tools, "model": model, "options": options}
+            {
+                "messages": list(messages),
+                "tools": tools,
+                "model": model,
+                "options": options,
+            }
         )
         return LLMResponse(
             text="spied",
@@ -41,7 +53,9 @@ class SpyProvider(Provider):
 @pytest.fixture
 def spies():
     """Replace the three real adapters with spies for the duration of a test."""
-    installed = {name: SpyProvider(name) for name in ("anthropic", "openai", "openrouter")}
+    installed = {
+        name: SpyProvider(name) for name in ("anthropic", "openai", "openrouter")
+    }
     for name, spy in installed.items():
         register_provider(name, lambda spy=spy: spy)
     yield installed

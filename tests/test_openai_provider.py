@@ -94,7 +94,9 @@ def test_assistant_tool_calls_are_serialized_with_json_string_arguments():
             Message.user("read a.py"),
             Message.assistant(
                 "on it",
-                tool_calls=[ToolCall(id="c1", name="read_file", arguments={"path": "a.py"})],
+                tool_calls=[
+                    ToolCall(id="c1", name="read_file", arguments={"path": "a.py"})
+                ],
             ),
             Message.tool_result("c1", "contents"),
         ],
@@ -159,7 +161,7 @@ def test_failed_tool_result_is_labeled_in_content_since_openai_has_no_error_flag
         ],
         model="gpt-5",
     )
-    content = [m for m in client.last["messages"] if m["role"] == "tool"][0]["content"]
+    content = next(m for m in client.last["messages"] if m["role"] == "tool")["content"]
     assert "boom" in content
     assert "error" in content.lower()
 
@@ -172,7 +174,10 @@ def test_tools_are_wrapped_in_the_function_envelope():
             ToolDef(
                 name="read_file",
                 description="Read a file",
-                parameters={"type": "object", "properties": {"path": {"type": "string"}}},
+                parameters={
+                    "type": "object",
+                    "properties": {"path": {"type": "string"}},
+                },
             )
         ],
         model="gpt-5",
@@ -202,14 +207,18 @@ def test_max_tokens_uses_the_completion_tokens_parameter():
     # `max_tokens` is rejected by current reasoning models; the replacement is
     # max_completion_tokens.
     prov, client = provider()
-    prov.generate([Message.user("hi")], model="gpt-5", options=GenerateOptions(max_tokens=99))
+    prov.generate(
+        [Message.user("hi")], model="gpt-5", options=GenerateOptions(max_tokens=99)
+    )
     assert client.last["max_completion_tokens"] == 99
     assert "max_tokens" not in client.last
 
 
 def test_effort_maps_to_reasoning_effort():
     prov, client = provider()
-    prov.generate([Message.user("hi")], model="gpt-5", options=GenerateOptions(effort="low"))
+    prov.generate(
+        [Message.user("hi")], model="gpt-5", options=GenerateOptions(effort="low")
+    )
     assert client.last["reasoning_effort"] == "low"
 
 
@@ -238,7 +247,10 @@ def test_named_tool_choice_uses_the_function_form():
         model="gpt-5",
         options=GenerateOptions(tool_choice="ls"),
     )
-    assert client.last["tool_choice"] == {"type": "function", "function": {"name": "ls"}}
+    assert client.last["tool_choice"] == {
+        "type": "function",
+        "function": {"name": "ls"},
+    }
 
 
 def test_provider_prefix_is_stripped_before_the_model_reaches_the_sdk():
@@ -251,7 +263,9 @@ def test_provider_prefix_is_stripped_before_the_model_reaches_the_sdk():
 
 
 def test_text_response_is_normalized():
-    prov, _ = provider(response=make_response(message={"role": "assistant", "content": "the answer"}))
+    prov, _ = provider(
+        response=make_response(message={"role": "assistant", "content": "the answer"})
+    )
     resp = prov.generate([Message.user("hi")], model="gpt-5")
     assert resp.text == "the answer"
     assert resp.provider == "openai"
@@ -296,18 +310,26 @@ def test_empty_argument_string_becomes_an_empty_dict():
                 "role": "assistant",
                 "content": None,
                 "tool_calls": [
-                    {"id": "c1", "type": "function", "function": {"name": "pwd", "arguments": ""}}
+                    {
+                        "id": "c1",
+                        "type": "function",
+                        "function": {"name": "pwd", "arguments": ""},
+                    }
                 ],
             },
             finish_reason="tool_calls",
         )
     )
-    assert prov.generate([Message.user("hi")], model="gpt-5").tool_calls[0].arguments == {}
+    assert (
+        prov.generate([Message.user("hi")], model="gpt-5").tool_calls[0].arguments == {}
+    )
 
 
 def test_length_finish_reason_maps_to_max_tokens():
     prov, _ = provider(response=make_response(finish_reason="length"))
-    assert prov.generate([Message.user("hi")], model="gpt-5").stop_reason == "max_tokens"
+    assert (
+        prov.generate([Message.user("hi")], model="gpt-5").stop_reason == "max_tokens"
+    )
 
 
 def test_content_filter_finish_reason_maps_to_refusal():
@@ -326,7 +348,9 @@ def test_cached_prompt_tokens_are_reported():
             }
         )
     )
-    assert prov.generate([Message.user("hi")], model="gpt-5").usage.cache_read_tokens == 16
+    assert (
+        prov.generate([Message.user("hi")], model="gpt-5").usage.cache_read_tokens == 16
+    )
 
 
 def test_a_response_with_no_choices_is_a_response_error():
