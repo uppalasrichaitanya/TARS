@@ -8,8 +8,9 @@ reports the gate result `/verify` left behind — and nothing more, because stat
 the loop does not read is state that can go stale unnoticed.
 
 The transcript is kept as `tars.providers.Message` objects rather than as text.
-They are what the provider layer already speaks, and `tars.memory.parse_messages`
-already reads that shape, so REFLECT needs no third format in between.
+Provider calls use those objects directly; REFLECT gets an explicit mapping
+conversion at this loop boundary because `tars.memory.parse_messages` accepts
+mappings, not provider types.
 """
 
 from __future__ import annotations
@@ -79,9 +80,12 @@ class Session:
         """Append turns to the transcript."""
         self._messages.extend(messages)
 
-    def as_messages(self) -> list[Message]:
-        """A fresh list for a provider call or for `memory.parse_messages`."""
-        return list(self._messages)
+    def as_messages(self) -> list[dict[str, str | None]]:
+        """Return the transcript in the mapping shape expected by memory."""
+        return [
+            {"role": message.role, "content": message.content}
+            for message in self._messages
+        ]
 
     def clear(self) -> None:
         """Drop the transcript and the verdicts, keeping the configuration.
@@ -101,7 +105,8 @@ class Session:
             "turns": len(self._messages),
             "auto_confirm": self.auto_confirm,
             "last_tier": (
-                None if self.last_classification is None
+                None
+                if self.last_classification is None
                 else self.last_classification.tier
             ),
             "last_verdict": self.last_verdict,
