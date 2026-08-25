@@ -28,23 +28,15 @@ The spec lives in `master_agent_loop.md`. Its five non-negotiable directives:
 
 | | |
 |---|---|
-| Tests | **959 passed, 1 failed, 2 skipped** |
-| `tars-verify .` | **FAIL — 2 passed, 2 failed** (exit 1) |
-| Commits | 7 ahead on `master` |
-| Working tree | 3 untracked paths — my in-progress `tars/loop/` work |
+| Tests | **984 passed, 0 failed, 2 skipped** |
+| `tars-verify .` | **PASS 4/4** |
+| Live `/run` | **VERIFIED end-to-end through AgentRouter** (2026-08-26): classify → edit → report on a temp repo; `add(2,3) = 5` after the fix |
 | Runtime dependencies | **zero** (`dependencies = []`), enforced by tests |
 
-**The red is mine and it is current work, not a regression.** One test fails and
-two gate checks are red, all from the half-built `tars/loop/`:
-
-- `tests/test_loop_session.py::test_a_session_transcript_is_readable_by_the_memory_writer`
-  — `TypeError: transcript messages must be mappings with a role and content, got Message`
-- `ruff format --check` — the new files aren't formatted yet
-- `pytest` — fails because of the one test above
-- `ruff check` and `mypy` both **PASS**
-
-At the last commit (`aab5b4f`) the gate was **PASS 4/4** with 934 tests. Details
-of the failure and its fix are in §5.
+The gate is fully green and the product works live. What is *not* yet
+verified live: a run whose VERIFY phase has real checks to grade (the live
+proof ran in a temp repo with no check surface — its "verification: fail"
+is the honest no-checks verdict, not a failure of the fix).
 
 ---
 
@@ -106,21 +98,27 @@ Three findings from this work that outlived the tasks that produced them:
 
 ---
 
-## 5. In progress — the `tars` REPL (`tars/loop/`)
+## 5. The `tars` REPL (`tars/loop/`) — COMPLETE and live-verified
 
-Six good libraries and no product. This is the spine that makes them one tool.
-
-**Shape:** persistent slash-command REPL, stdlib only, plain streaming output.
+Six good libraries, now one product. Built file-by-file TDD-first across
+commits `d99a961`…`fdc849a`, shipped as the `tars` command in `487455a`.
 
 | File | Contents | State |
 |---|---|---|
-| `types.py` | `Phase`, `RunPromptSpec`, `RunReport`, `ToolCall`, `ToolResult` | ✅ done, 12 tests green |
-| `session.py` | `Session` — root, model, transcript, last verdicts | 🔄 1 test red (see below) |
-| `_io.py` | raw-ANSI output: `NO_COLOR`, `isatty`, `\033[…m` | ⬜ |
-| `tools.py` | `read_file` / `list_dir` / `apply_edit` / `run_command` | ⬜ |
-| `engine.py` | the seven phases, each a real call | ⬜ |
-| `repl.py` | readline loop, slash dispatch, one live `Session` | ⬜ |
-| `cli.py` | `tars` opens the REPL; also one-shot subcommands | ⬜ |
+| `types.py` | `Phase`, `RunPromptSpec`, `RunReport`, `ToolCall`, `ToolResult` | ✅ |
+| `session.py` | `Session` — root, model, transcript, last verdicts; env-aware default model | ✅ |
+| `_io.py` | raw-ANSI output: `NO_COLOR`, `isatty`, `\033[…m` | ✅ |
+| `tools.py` | `read_file` / `list_dir` / `apply_edit` / `run_command`; both mutating tools behind the confirm gate | ✅ |
+| `engine.py` | the seven phases + model→tool dispatch, retry via ACT's `RETRYABLE_REASONS` | ✅ |
+| `repl.py` | slash dispatch over one live `Session`, injected streams | ✅ |
+| `cli.py` | bare `tars` opens the REPL; `tars run`/`tars route` one-shots; exit codes 0/1/2 | ✅ |
+
+**Live proof (2026-08-26):** a temp repo whose `add()` subtracted was fixed
+by a real `/run` through AgentRouter — CLASSIFY printed its verdict, the
+model requested an anchored edit which applied correctly, VERIFY honestly
+reported "no checks" rather than passing, REFLECT proposed two candidates
+without auto-committing them, REPORT rendered everything including
+uncertainties verbatim.
 
 ### Every phase is a real call, nothing stubbed
 
@@ -217,14 +215,15 @@ Applied to everything above, and to everything still to come:
 
 ---
 
-## 9. Immediate next steps
+## 9. Next steps
 
-1. Fix the `Session` → `parse_messages` conversion; format the new files; gate
-   back to PASS 4/4.
-2. Build `_io.py`, `tools.py`, `engine.py`, `repl.py`, `cli.py` — TDD each.
-3. `pip install -e .` and confirm `tars` actually launches (the failure mode
-   already hit once with the other three commands).
-4. **A real live `/run`** through AgentRouter on a small edit: preview → confirm
-   → apply → VERIFY passes → REFLECT proposes → REPORT. That will be the first
-   time the whole product works end to end.
-5. Regenerate the README, commit.
+1. ~~Fix the seam, build the loop, ship `tars`~~ — done, live-verified
+   (see §5).
+2. A live `/run` on a repo **with a real check surface** — so VERIFY grades
+   an actual fix rather than reporting no-checks. TARS itself is the
+   natural target.
+3. GPT-5.6 provider path — the second AgentRouter key exists (Codex uses
+   it); needs either a Responses-API adapter or confirming the OpenAI
+   surface accepts our client.
+4. Then §6 as written: browser-test-efficient, semantic recall, and the
+   smaller optional items.
