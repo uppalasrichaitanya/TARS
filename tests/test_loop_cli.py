@@ -64,3 +64,32 @@ def test_cli_reports_unconfigured_provider_without_traceback(tmp_path: Path) -> 
     assert code == EXIT_PROVIDER
     assert "no Anthropic credentials" in err.getvalue()
     assert "Traceback" not in err.getvalue()
+
+
+def test_cli_truncates_html_provider_error_body(tmp_path: Path) -> None:
+    from tars.loop.cli import main
+    from tars.providers.errors import ProviderAPIError
+
+    class BrokenEngine:
+        def run(self, spec, session, *, output):
+            raise ProviderAPIError(
+                "HTTP 405 from provider: <html><body>"
+                + "blocked " * 100
+                + "</body></html>",
+                provider="agentrouter",
+            )
+
+    err = StringIO()
+    assert (
+        main(
+            ["run", "fix it", "--root", str(tmp_path)],
+            stdout=StringIO(),
+            stderr=err,
+            engine=BrokenEngine(),
+        )
+        == 3
+    )
+    text = err.getvalue()
+    assert "HTTP 405 from provider" in text
+    assert "<html>" not in text and "</body>" not in text
+    assert len(text) < 280

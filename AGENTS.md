@@ -112,6 +112,14 @@ this repo, and a test pins that verbatim property. So the formatter excludes it
 path otherwise bypasses an exclude). Don't "fix" the formatting of the generated
 README — regenerate it instead.
 
+### 6. AgentRouter's WAF intermittently blocks valid requests
+
+Some hours, ~half of live calls fail with `HTTP 405` carrying an Aliyun WAF
+block page — while other calls in the same run pass. Retry once; if it fails
+again, report interrupted-with-reason, never as verified or failed-by-content.
+Never paste the block-page HTML into user-facing output. This is their
+infrastructure, not the whitelist rule (that one is a 401).
+
 ---
 
 ## Conventions this codebase actually follows

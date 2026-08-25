@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from collections.abc import Callable
 from typing import Protocol, TextIO
@@ -182,7 +183,12 @@ def _provider_message(exc: ProviderError) -> str:
         return (
             "no Anthropic credentials - source ~/TARS/.env or set ANTHROPIC_AUTH_TOKEN"
         )
-    return f"provider error: {exc}"
+    text = re.sub(r"<[^>]*>", " ", str(exc))
+    text = " ".join(text.split())
+    match = re.search(r"HTTP\s+\d{3}\s+from\s+provider", text, re.IGNORECASE)
+    prefix = match.group(0) if match else "provider error"
+    detail = text[match.end() :] if match else text
+    return f"{prefix}{detail[:200]}"
 
 
 def write_report(report: RunReport, stream: TextIO) -> None:
