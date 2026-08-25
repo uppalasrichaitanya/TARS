@@ -28,6 +28,9 @@ tars-readme = "tars.readme.cli:main"
 # queue is a thing a person does between loop runs, not something the loop can do
 # for itself.
 tars-memory = "tars.memory.cli:main"
+# The loop itself - the product the other three were built to serve. Bare `tars`
+# opens the REPL; subcommands are one-shot forms of the same phases.
+tars = "tars.loop.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["tars*"]

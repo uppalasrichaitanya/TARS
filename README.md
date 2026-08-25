@@ -14,6 +14,18 @@ This project has no runtime dependencies.
 
 ## How to run it
 
+### `tars`
+
+Run TARS's disciplined agent loop.
+
+```console
+tars
+```
+
+Flags: `--yes`, `--root`, `--model`
+
+<sub>declared in `pyproject.toml`</sub>
+
 ### `tars-memory`
 
 Read a session transcript and propose the memory entries it earned: domain-tagged, scored, and quoted from the turn they came from. Also reads back what earlier sessions kept.
@@ -121,6 +133,14 @@ reflect_on("run/session.jsonl").nothing_worth_remembering
     - `tars/act/local.py` — The built-in executor: this machine, this repo, stdlib only.
     - `tars/act/registry.py` — Which executor does ACT's work, chosen by name rather than by import.
     - `tars/act/types.py` — What ACT was asked to do, and what came of it.
+  - `tars/loop/__init__.py` — TARS loop orchestrator — the seven phases, driven.
+    - `tars/loop/_io.py` — Small output helpers for the REPL.
+    - `tars/loop/cli.py` — `tars` — persistent REPL and one-shot loop commands.
+    - `tars/loop/engine.py` — The seven-phase loop, composed from TARS's tested phase modules.
+    - `tars/loop/repl.py` — The persistent slash-command interface over one live :class:`Session`.
+    - `tars/loop/session.py` — What persists between commands.
+    - `tars/loop/tools.py` — Model-facing ACT tools.
+    - `tars/loop/types.py` — The loop's own vocabulary.
   - `tars/memory/__init__.py` — TARS memory writer — PHASE 6 (REFLECT), isolated. (`python -m tars.memory`)
     - `tars/memory/cli.py` — `tars-memory` — the REFLECT phase as a command.
     - `tars/memory/domains.py` — Which partition does a fact belong to, and what said so.
@@ -131,15 +151,7 @@ reflect_on("run/session.jsonl").nothing_worth_remembering
     - `tars/memory/types.py` — Types the memory writer speaks: what a candidate is, and what makes one
   - `tars/providers/__init__.py` — TARS provider adapter layer.
     - `tars/providers/_openai_compat.py` — Translation shared by every OpenAI-compatible endpoint.
-    - `tars/providers/agentrouter_provider.py` — AgentRouter adapter — the Anthropic Messages API at a third-party host.
-    - `tars/providers/anthropic_provider.py` — Anthropic adapter — direct SDK, first-class per the spec.
-    - `tars/providers/base.py` — The one interface every provider implements.
-    - `tars/providers/errors.py` — Errors raised by the provider adapter layer.
-    - `tars/providers/openai_provider.py` — OpenAI adapter — direct SDK, first-class per the spec.
-    - `tars/providers/openrouter_provider.py` — OpenRouter adapter — plain HTTP, no SDK.
-    - `tars/providers/registry.py` — Model-string routing and provider construction.
-    - `tars/providers/types.py` — Provider-neutral types spoken by the TARS agent loop.
-- …and 17 more modules
+- …and 25 more modules
 
 Tests live in `tests/`.
 
