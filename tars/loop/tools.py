@@ -118,6 +118,8 @@ class Toolbox:
             cwd=args.get("cwd"),
             timeout=args.get("timeout", DEFAULT_COMMAND_TIMEOUT_S),
         )
+        if not self.confirm(command.display):
+            return ToolResult.error_result("run_command", "command declined")
         result = self.executor.run(command)
         if not result.ok:
             return _action_error("run_command", result)

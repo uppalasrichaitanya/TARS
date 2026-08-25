@@ -69,9 +69,27 @@ def test_apply_edit_reports_decline_without_writing(tmp_path: Path) -> None:
 
 
 def test_run_command_uses_argv_and_root(tmp_path: Path) -> None:
-    result = Toolbox(tmp_path).dispatch(ToolCall("1", "run_command", {"argv": ["pwd"]}))
+    result = Toolbox(tmp_path, confirm=lambda _preview: True).dispatch(
+        ToolCall("1", "run_command", {"argv": ["pwd"]})
+    )
     assert result.ok
     assert Path(result.output.strip()) == tmp_path.resolve()
+
+
+def test_run_command_shows_argv_and_decline_prevents_execution(tmp_path: Path) -> None:
+    seen: list[str] = []
+
+    def confirm(preview: str) -> bool:
+        seen.append(preview)
+        return False
+
+    result = Toolbox(tmp_path, confirm=confirm).dispatch(
+        ToolCall("1", "run_command", {"argv": ["touch", "ran.txt"]})
+    )
+    assert not result.ok
+    assert "declined" in result.text
+    assert seen == ["touch ran.txt"]
+    assert not (tmp_path / "ran.txt").exists()
 
 
 def test_unknown_tool_is_a_tool_error(tmp_path: Path) -> None:
