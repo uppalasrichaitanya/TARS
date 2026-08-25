@@ -126,7 +126,7 @@ class Toolbox:
         output = result.stdout
         if result.stderr:
             output += ("\n" if output else "") + result.stderr
-        return ToolResult.ok_result("run_command", output)
+        return ToolResult.ok_result("run_command", output, touched=(command.display,))
 
     def _inside(self, path: str) -> Path | None:
         return resolve_inside(self.root, path)

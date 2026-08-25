@@ -11,15 +11,15 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
-import re
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import NoReturn, TextIO
 
 from .. import router
-from ..providers.errors import ProviderError, ProviderNotConfiguredError
+from ..providers.errors import ProviderError
 from ..router import Classification
+from ._io import provider_message
 from .engine import Engine
 from .repl import EngineRunner, Repl, _verdict, write_report
 from .session import Session
@@ -93,21 +93,7 @@ def main(
             RunPromptSpec(args.task, auto_confirm=args.yes), session, output=out
         )
     except ProviderError as exc:
-        err.write(_provider_message(exc) + "\n")
+        err.write(provider_message(exc) + "\n")
         return EXIT_PROVIDER
     write_report(report, out)
     return EXIT_FAILED if report.verification_passed is False else EXIT_OK
-
-
-def _provider_message(exc: ProviderError) -> str:
-    if isinstance(exc, ProviderNotConfiguredError):
-        return (
-            "no Anthropic credentials - source ~/TARS/.env or set ANTHROPIC_AUTH_TOKEN"
-        )
-    text = str(exc)
-    text = re.sub(r"<[^>]*>", " ", text)
-    text = " ".join(text.split())
-    match = re.search(r"HTTP\s+\d{3}\s+from\s+provider", text, re.IGNORECASE)
-    prefix = match.group(0) if match else "provider error"
-    detail = text[match.end() :] if match else text
-    return f"{prefix}{detail[:200]}"

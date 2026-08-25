@@ -3,16 +3,15 @@
 from __future__ import annotations
 
 import json
-import re
 import sys
 from collections.abc import Callable
 from typing import Protocol, TextIO
 
 from .. import memory, router, verification
 from ..memory.store import MemoryStore
-from ..providers.errors import ProviderError, ProviderNotConfiguredError
+from ..providers.errors import ProviderError
 from ..router import Classification
-from ._io import color_enabled, is_tty, paint
+from ._io import color_enabled, is_tty, paint, provider_message
 from .engine import Engine
 from .session import Session
 from .types import RunPromptSpec, RunReport
@@ -108,7 +107,7 @@ class Repl:
             else:
                 self._write(f"unknown command: {command}; try /help\n")
         except ProviderError as exc:
-            self._write(_provider_message(exc) + "\n")
+            self._write(provider_message(exc) + "\n")
         except (OSError, TypeError, ValueError, AttributeError) as exc:
             self._write(f"error: {exc}\n")
         return False
@@ -176,19 +175,6 @@ class Repl:
 def _verdict(verdict: Classification) -> str:
     state = "reversible" if verdict.reversible else "not reversible"
     return f"tier {verdict.tier} · {verdict.blast} blast · {state}: {verdict.why}"
-
-
-def _provider_message(exc: ProviderError) -> str:
-    if isinstance(exc, ProviderNotConfiguredError):
-        return (
-            "no Anthropic credentials - source ~/TARS/.env or set ANTHROPIC_AUTH_TOKEN"
-        )
-    text = re.sub(r"<[^>]*>", " ", str(exc))
-    text = " ".join(text.split())
-    match = re.search(r"HTTP\s+\d{3}\s+from\s+provider", text, re.IGNORECASE)
-    prefix = match.group(0) if match else "provider error"
-    detail = text[match.end() :] if match else text
-    return f"{prefix}{detail[:200]}"
 
 
 def write_report(report: RunReport, stream: TextIO) -> None:

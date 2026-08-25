@@ -67,6 +67,7 @@ def test_cli_reports_unconfigured_provider_without_traceback(tmp_path: Path) -> 
 
 
 def test_cli_truncates_html_provider_error_body(tmp_path: Path) -> None:
+    from tars.loop._io import provider_message
     from tars.loop.cli import main
     from tars.providers.errors import ProviderAPIError
 
@@ -90,6 +91,15 @@ def test_cli_truncates_html_provider_error_body(tmp_path: Path) -> None:
         == 3
     )
     text = err.getvalue()
-    assert "HTTP 405 from provider" in text
-    assert "<html>" not in text and "</body>" not in text
-    assert len(text) < 280
+    assert (
+        text
+        == provider_message(
+            ProviderAPIError(
+                "HTTP 405 from provider: <html><body>"
+                + "blocked " * 100
+                + "</body></html>",
+                provider="agentrouter",
+            )
+        )
+        + "\n"
+    )

@@ -280,3 +280,23 @@ def test_dispatch_retries_timeout_once_and_non_timeout_never(tmp_path: Path) -> 
     )
     assert not _dispatch(failed_box, call).ok
     assert failed_box.calls == 1
+
+
+def test_successful_run_command_is_reported_as_touched(tmp_path: Path) -> None:
+    from tars.loop.engine import Engine
+
+    call = ToolCall("c", "run_command", {"argv": ["touch", "created.txt"]})
+
+    class FakeToolbox:
+        def dispatch(self, _call: LoopToolCall) -> ToolResult:
+            return ToolResult.ok_result(
+                "run_command", "", touched=("touch created.txt",)
+            )
+
+    responses = iter((_response("plan"), _tool_response(call), _response("done")))
+    session = Session(root=tmp_path, model="fake")
+    report = Engine(
+        provider=lambda *_args, **_kwargs: next(responses),
+        toolbox=lambda *_args, **_kwargs: FakeToolbox(),
+    ).run(RunPromptSpec("create it"), session, output=StringIO())
+    assert report.touched == ("touch created.txt",)

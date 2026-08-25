@@ -73,14 +73,17 @@ class ToolResult:
     name: str
     output: str = ""
     error: str | None = None
+    touched: tuple[str, ...] = ()
 
     @property
     def ok(self) -> bool:
         return self.error is None
 
     @classmethod
-    def ok_result(cls, name: str, output: str) -> ToolResult:
-        return cls(name=name, output=output)
+    def ok_result(
+        cls, name: str, output: str, *, touched: tuple[str, ...] = ()
+    ) -> ToolResult:
+        return cls(name=name, output=output, touched=touched)
 
     # `ok` is the property, so the constructors are named for what they carry.
     @classmethod

@@ -138,6 +138,9 @@ class Engine:
                     declined.append(f"{call.name}: {result.error}")
                 elif not result.ok:
                     uncertainties.append(f"tool {call.name} failed: {result.error}")
+                for item in result.touched:
+                    if item not in touched:
+                        touched.append(item)
 
         if plan.tool_calls:
             dispatch(plan.tool_calls)
