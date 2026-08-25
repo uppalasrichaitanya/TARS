@@ -28,15 +28,18 @@ The spec lives in `master_agent_loop.md`. Its five non-negotiable directives:
 
 | | |
 |---|---|
-| Tests | **984 passed, 0 failed, 2 skipped** |
+| Tests | **987 passed, 0 failed, 2 skipped** |
 | `tars-verify .` | **PASS 4/4** |
 | Live `/run` | **VERIFIED end-to-end through AgentRouter** (2026-08-26): classify → edit → report on a temp repo; `add(2,3) = 5` after the fix |
+| Live graded run | **VERIFIED** (2026-08-26): a repo with a real failing pytest went FAIL → PASS across one live `/run`; VERIFY graded an actual fix |
 | Runtime dependencies | **zero** (`dependencies = []`), enforced by tests |
 
-The gate is fully green and the product works live. What is *not* yet
-verified live: a run whose VERIFY phase has real checks to grade (the live
-proof ran in a temp repo with no check surface — its "verification: fail"
-is the honest no-checks verdict, not a failure of the fix).
+Known caveats, stated plainly:
+- AgentRouter's WAF intermittently 405s valid requests (AGENTS.md trap #6);
+  live runs need a retry and honest interruption reports.
+- **REPORT under-reports `touched` when the model edits via `run_command`**
+  instead of `apply_edit` (seen in the graded run: repo changed,
+  `touched: none`). Unfixed; next slice.
 
 ---
 
