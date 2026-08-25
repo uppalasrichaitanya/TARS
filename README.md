@@ -58,6 +58,42 @@ Flags: `--only`, `--include`, `--list`, `--json`, `--fail-fast`, `--timeout`, `-
 Every snippet below was taken from the file named under it, and checked against the current source.
 
 ```python
+from tars.act import Edit, Hunk, LocalExecutor
+
+executor = LocalExecutor(".")
+result = executor.apply(Edit.replace("a.py", Hunk("x = 1", "x = 2")))
+result.ok, result.diff, result.touched
+```
+
+<sub>`tars/act/__init__.py:5`</sub>
+
+```python
+from tars.act import Command, LocalExecutor
+
+LocalExecutor(".").run(Command(["pytest", "-q"])).reason
+```
+
+<sub>`tars/act/__init__.py:24`</sub>
+
+```python
+from tars.act import Edit, Hunk, LocalExecutor
+
+preview = LocalExecutor(".", dry_run=True)
+preview.apply(Edit.replace("a.py", Hunk("x = 1", "x = 2"))).diff
+```
+
+<sub>`tars/act/__init__.py:40`</sub>
+
+```python
+from tars.act import get_executor, known_executors
+
+get_executor("local")
+known_executors()
+```
+
+<sub>`tars/act/__init__.py:48`</sub>
+
+```python
 from tars.memory import reflect_on
 
 report = reflect_on("run/session.jsonl")
@@ -77,50 +113,14 @@ reflect_on("run/session.jsonl").nothing_worth_remembering
 
 <sub>`tars/memory/__init__.py:22`</sub>
 
-```python
-from tars.memory import propose, parse_text
-
-candidate = propose(parse_text("We decided to use stdlib http.")).candidates[0]
-candidate.signals      # ("cue:decided-to", "role:assistant", ...)
-candidate.evidence     # the turns it was read out of, quoted verbatim
-candidate.disposition  # "commit", "review" or "drop"
-```
-
-<sub>`tars/memory/__init__.py:29`</sub>
-
-```python
-from tars.memory import reflect_on, remember
-
-remember(reflect_on("run/session.jsonl"))
-```
-
-<sub>`tars/memory/__init__.py:42`</sub>
-
-```python
-from tars.memory import recall
-
-recall(domains=("providers",))
-recall(kinds=("constraint",), limit=5)
-```
-
-<sub>`tars/memory/__init__.py:51`</sub>
-
-```python
-from tars.providers import Message, ToolDef, generate
-
-response = generate(
-    [Message.user("What files are in this repo?")],
-    tools=[ToolDef("ls", "List files", {"type": "object", "properties": {}})],
-    model="claude-opus-5",          # or "gpt-5", or "qwen/qwen-3-235b"
-)
-response.text, response.tool_calls, response.usage.total_tokens
-```
-
-<sub>`tars/providers/__init__.py:5`</sub>
-
 ## How it's structured
 
 - `tars/__init__.py` — TARS — a disciplined, multi-session coding agent loop.
+  - `tars/act/__init__.py` — TARS ACT — PHASE 4, isolated: the phase that actually touches the repo.
+    - `tars/act/base.py` — The one interface every executor implements.
+    - `tars/act/local.py` — The built-in executor: this machine, this repo, stdlib only.
+    - `tars/act/registry.py` — Which executor does ACT's work, chosen by name rather than by import.
+    - `tars/act/types.py` — What ACT was asked to do, and what came of it.
   - `tars/memory/__init__.py` — TARS memory writer — PHASE 6 (REFLECT), isolated. (`python -m tars.memory`)
     - `tars/memory/cli.py` — `tars-memory` — the REFLECT phase as a command.
     - `tars/memory/domains.py` — Which partition does a fact belong to, and what said so.
@@ -139,12 +139,7 @@ response.text, response.tool_calls, response.usage.total_tokens
     - `tars/providers/openrouter_provider.py` — OpenRouter adapter — plain HTTP, no SDK.
     - `tars/providers/registry.py` — Model-string routing and provider construction.
     - `tars/providers/types.py` — Provider-neutral types spoken by the TARS agent loop.
-  - `tars/readme/__init__.py` — TARS readme writer — a README built out of what a repo actually contains. (`python -m tars.readme`)
-    - `tars/readme/cli.py` — `tars-readme` — write a README out of what a repo actually contains.
-    - `tars/readme/examples.py` — Mining usage examples out of a repo, and distrusting them until they resolve.
-    - `tars/readme/inspection.py` — One inspection pass: everything the tool knows, and where it learned it.
-    - `tars/readme/manifest.py` — What the project says about itself, read out of its manifest.
-- …and 12 more modules
+- …and 17 more modules
 
 Tests live in `tests/`.
 
