@@ -44,3 +44,23 @@ def test_route_subcommand_only_classifies(tmp_path: Path) -> None:
     )
     assert code == 0
     assert "tier 0" in out.getvalue()
+
+
+def test_cli_reports_unconfigured_provider_without_traceback(tmp_path: Path) -> None:
+    from tars.loop.cli import EXIT_PROVIDER, main
+    from tars.providers.errors import ProviderNotConfiguredError
+
+    class BrokenEngine:
+        def run(self, spec, session, *, output):
+            raise ProviderNotConfiguredError("missing")
+
+    out, err = StringIO(), StringIO()
+    code = main(
+        ["run", "fix it", "--root", str(tmp_path)],
+        stdout=out,
+        stderr=err,
+        engine=BrokenEngine(),
+    )
+    assert code == EXIT_PROVIDER
+    assert "no Anthropic credentials" in err.getvalue()
+    assert "Traceback" not in err.getvalue()

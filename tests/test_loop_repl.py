@@ -138,3 +138,27 @@ def test_repl_dispatches_verify_memory_approve_and_pillars(tmp_path: Path) -> No
     assert entry.id in text
     assert "approved" in text
     assert "ORIENT" in text and "REPORT" in text
+
+
+def test_repl_reports_unconfigured_provider_and_returns_to_prompt(
+    tmp_path: Path,
+) -> None:
+    from tars.loop.repl import Repl
+    from tars.providers.errors import ProviderNotConfiguredError
+
+    class BrokenEngine:
+        def run(self, spec, session, *, output):
+            raise ProviderNotConfiguredError("missing")
+
+    out = StringIO()
+    repl = Repl(
+        Session(root=tmp_path),
+        stdin=StringIO("/run fix it\n/status\n/exit\n"),
+        stdout=out,
+        engine=BrokenEngine(),
+    )
+    assert repl.run() == 0
+    text = out.getvalue()
+    assert "no Anthropic credentials" in text
+    assert '"model"' in text
+    assert "Traceback" not in text

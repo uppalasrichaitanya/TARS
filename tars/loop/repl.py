@@ -9,6 +9,7 @@ from typing import Protocol, TextIO
 
 from .. import memory, router, verification
 from ..memory.store import MemoryStore
+from ..providers.errors import ProviderError, ProviderNotConfiguredError
 from ..router import Classification
 from ._io import color_enabled, is_tty, paint
 from .engine import Engine
@@ -105,6 +106,8 @@ class Repl:
                 self._pillars()
             else:
                 self._write(f"unknown command: {command}; try /help\n")
+        except ProviderError as exc:
+            self._write(_provider_message(exc) + "\n")
         except (OSError, TypeError, ValueError, AttributeError) as exc:
             self._write(f"error: {exc}\n")
         return False
@@ -172,6 +175,14 @@ class Repl:
 def _verdict(verdict: Classification) -> str:
     state = "reversible" if verdict.reversible else "not reversible"
     return f"tier {verdict.tier} · {verdict.blast} blast · {state}: {verdict.why}"
+
+
+def _provider_message(exc: ProviderError) -> str:
+    if isinstance(exc, ProviderNotConfiguredError):
+        return (
+            "no Anthropic credentials - source ~/TARS/.env or set ANTHROPIC_AUTH_TOKEN"
+        )
+    return f"provider error: {exc}"
 
 
 def write_report(report: RunReport, stream: TextIO) -> None:
