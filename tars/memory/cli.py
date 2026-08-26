@@ -174,6 +174,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     reject.add_argument("entry_id", metavar="ID", help="id shown by `pending`")
 
+    correct = subs.add_parser(
+        "correct", parents=[_common()], help="mark a stored entry as wrong"
+    )
+    correct.add_argument("entry_id", metavar="ID")
+    correct.add_argument("reason", help="why the entry was wrong")
+
     return parser
 
 
@@ -228,6 +234,7 @@ def main(
         "pending": _pending,
         "approve": _approve,
         "reject": _reject,
+        "correct": _correct,
     }[args.command]
     try:
         return handler(args, out, err)
@@ -457,6 +464,15 @@ def _reject(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
         )
         return EXIT_USAGE
     out.write(f"dropped {args.entry_id}\n")
+    return EXIT_OK
+
+
+def _correct(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
+    entry = MemoryStore(root=Path(args.root)).correct(args.entry_id, args.reason)
+    if entry is None:
+        err.write(f"{PROG}: unknown entry: {args.entry_id}\n")
+        return EXIT_USAGE
+    out.write(f"corrected {entry.id}: {entry.corrected_reason}\n")
     return EXIT_OK
 
 

@@ -264,6 +264,23 @@ class MemoryStore:
             touched = True
         return touched
 
+    def correct(self, entry_id: str, reason: str) -> MemoryEntry | None:
+        """Mark an entry wrong while retaining an auditable reason."""
+        corrected: MemoryEntry | None = None
+        for domain in self.partitions():
+            entries = self._partition_entries(domain)
+            if not any(entry.id == entry_id for entry in entries):
+                continue
+            updated = []
+            for entry in entries:
+                if entry.id == entry_id:
+                    corrected = entry.corrected(reason)
+                    updated.append(corrected)
+                else:
+                    updated.append(entry)
+            self._save_partition(domain, updated)
+        return corrected
+
     def _commit(
         self, candidate: Candidate, session: str, created_at: str | None
     ) -> tuple[MemoryEntry | None, tuple[str, ...], tuple[str, ...]]:

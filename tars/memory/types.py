@@ -233,6 +233,7 @@ class MemoryEntry:
     #: Set when a later entry replaces this one. Not a deletion: the entry stays
     #: readable, it just stops being current.
     superseded_by: str | None = None
+    corrected_reason: str | None = None
 
     def __post_init__(self) -> None:
         for name in ("domains", "evidence", "supersedes"):
@@ -262,7 +263,10 @@ class MemoryEntry:
 
     @property
     def live(self) -> bool:
-        return self.superseded_by is None
+        return self.superseded_by is None and self.corrected_reason is None
+
+    def corrected(self, reason: str) -> MemoryEntry:
+        return MemoryEntry(**{**self.__dict__, "corrected_reason": reason})
 
     def superseded_by_entry(self, entry_id: str) -> MemoryEntry:
         """This entry, marked as replaced by `entry_id`."""
@@ -293,6 +297,7 @@ class MemoryEntry:
             "evidence": [e.to_dict() for e in self.evidence],
             "supersedes": list(self.supersedes),
             "superseded_by": self.superseded_by,
+            "corrected_reason": self.corrected_reason,
         }
 
     @classmethod
@@ -309,6 +314,7 @@ class MemoryEntry:
             evidence=tuple(Evidence.from_dict(e) for e in data.get("evidence", ())),
             supersedes=tuple(data.get("supersedes", ())),
             superseded_by=data.get("superseded_by"),
+            corrected_reason=data.get("corrected_reason"),
         )
 
 

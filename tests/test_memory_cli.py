@@ -37,7 +37,7 @@ from tars.memory.cli import (
 from tars.memory.propose import propose
 from tars.memory.store import STORE_DIR, MemoryStore
 from tars.memory.transcript import load_transcript
-from tars.memory.types import Candidate, Evidence, MemoryEntry
+from tars.memory.types import Candidate, Evidence, MemoryEntry, ReflectionReport
 
 STAMP = "2026-08-20T02:00:00+00:00"
 
@@ -442,6 +442,30 @@ def test_rejecting_an_id_that_is_not_queued_is_an_error_too(tmp_path) -> None:
     code, _, err = run("reject", "gotcha-deadbeef", "--root", str(tmp_path))
     assert code == EXIT_USAGE
     assert "deadbeef" in err
+
+
+def test_correct_marks_a_stored_entry_wrong(tmp_path) -> None:
+    candidate = Candidate(
+        text="Use frobnicator cache.",
+        kind="decision",
+        domains=("backend",),
+        why="Future sessions would rely on it.",
+        confidence=0.80,
+    )
+    store = MemoryStore(tmp_path)
+    entry = store.write(ReflectionReport("test", (candidate,))).committed[0]
+
+    code, out, err = run(
+        "correct",
+        entry.id,
+        "was wrong because it corrupts data",
+        "--root",
+        str(tmp_path),
+    )
+
+    assert code == EXIT_OK, err
+    assert "corrected" in out
+    assert store.recall(("backend",)) == ()
 
 
 # ── invocation ────────────────────────────────────────────────────────────

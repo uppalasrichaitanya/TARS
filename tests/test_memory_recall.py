@@ -119,6 +119,28 @@ def test_package_exposes_related_recall(tmp_path) -> None:
     assert "recall_related" in memory.__all__
 
 
+def test_corrected_high_confidence_entry_is_excluded_from_related_recall(
+    tmp_path,
+) -> None:
+    store = MemoryStore(root=tmp_path)
+    item = candidate(
+        "Use frobnicator cache for parser performance.",
+        domain="backend",
+        confidence=0.80,
+    )
+    remember(store, item)
+    entry = MemoryEntry.from_candidate(item)
+    assert [found.id for found in store.recall_related("frobnicator parser")] == [
+        entry.id
+    ]
+
+    corrected = store.correct(entry.id, "was wrong because the cache corrupts data")
+
+    assert corrected is not None
+    assert corrected.corrected_reason == "was wrong because the cache corrupts data"
+    assert store.recall_related("frobnicator parser") == ()
+
+
 def test_similarity_module_has_only_standard_library_imports() -> None:
     path = ROOT / "tars" / "memory" / "similarity.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
