@@ -353,6 +353,69 @@ def test_tier_zero_uses_configured_cheaper_model_for_plan_and_act(
     assert not report.uncertainties
 
 
+def test_shell_string_run_command_gets_argv_correction_and_another_act_turn(
+    tmp_path: Path,
+) -> None:
+    from tars.loop.engine import Engine
+
+    shell_call = ToolCall("run-1", "run_command", {"argv": ["mkdir -p greet"]})
+    seen_results: list[str] = []
+    provider_calls = 0
+
+    class FakeToolbox:
+        def dispatch(self, _call: LoopToolCall) -> ToolResult:
+            return ToolResult.error_result(
+                "run_command", 'not-found: "mkdir -p greet" is not installed'
+            )
+
+    def provider(messages, _tools, _model):
+        nonlocal provider_calls
+        provider_calls += 1
+        tool_messages = [m for m in messages if m.role == "tool"]
+        if tool_messages:
+            seen_results.append(tool_messages[-1].content or "")
+        if provider_calls == 1:
+            return _response("plan")
+        if provider_calls == 2:
+            return _tool_response(shell_call)
+        return _response("done")
+
+    report = Engine(
+        provider=provider,
+        toolbox=lambda *_args, **_kwargs: FakeToolbox(),
+        verify=lambda **_kwargs: GateReport(root=str(tmp_path), results=()),
+    ).run(RunPromptSpec("create it", max_turns=4), Session(root=tmp_path, model="fake"))
+
+    assert provider_calls == 3
+    assert seen_results == [
+        (
+            "Corrective guidance: run_command accepts an argv list, not a shell string. "
+            "Re-issue this call with the program and each argument as separate argv items "
+            '(for example: ["mkdir", "-p", "greet"]). Do not use shell syntax.'
+        ),
+    ]
+    assert not report.uncertainties
+
+
+def test_genuine_missing_binary_not_found_is_not_corrected(tmp_path: Path) -> None:
+    from tars.loop.engine import _dispatch
+
+    call = ToolCall("run-1", "run_command", {"argv": ["definitely-missing-binary"]})
+    dispatches = 0
+
+    class FakeToolbox:
+        def dispatch(self, _call: LoopToolCall) -> ToolResult:
+            nonlocal dispatches
+            dispatches += 1
+            return ToolResult.error_result(
+                "run_command", 'not-found: "definitely-missing-binary" is not installed'
+            )
+
+    result = _dispatch(FakeToolbox(), call)
+    assert result.error == 'not-found: "definitely-missing-binary" is not installed'
+    assert dispatches == 1
+
+
 def test_tier_zero_without_a_resolvable_mapping_falls_back_honestly(
     tmp_path: Path,
 ) -> None:

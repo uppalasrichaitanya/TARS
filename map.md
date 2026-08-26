@@ -28,7 +28,7 @@ The spec lives in `master_agent_loop.md`. Its five non-negotiable directives:
 
 | | |
 |---|---|
-| Tests | **1027 passed, 0 failed, 2 skipped** |
+| Tests | **1029 passed, 0 failed, 2 skipped** |
 | `tars-verify .` | **PASS 4/4** |
 | Transient retry | **SHIPPED + hardened** (2026-08-26): 405/429/502/503 from **any** provider (not just AgentRouter) now retry, up to 3 attempts with exponential backoff (2s, 4s, injectable sleeper); PLAN exhaustion interrupts, ACT exhaustion degrades to an honest report. Previously gated to `agentrouter` only, so OpenRouter/TokenRouter 429/503 raised immediately — fatal for free tier-0 |
 | Session persistence | **SHIPPED** (2026-08-26): append-only JSONL, `/resume [ID]`, durable `/clear`, same-root discovery in `/status`; interrupted runs never resume mid-ACT |
@@ -213,16 +213,19 @@ model is live so it is never a mystery.
      so this is next after semantic recall's design conversation.
   9. **Tier-0 free-model reality (verified by a live `/run`).** A mechanical
      task now classifies tier 0 and PLAN+ACT correctly route to the free
-     `minimax/minimax-m3:free` (the 429 retry recovered mid-run). But free
-     models vary in fidelity to TARS's **argv-only** `run_command` contract:
-     minimax wrote the files via `write_file` but phrased `run_command` as a
-     shell *string* (`mkdir -p …`), which the executor correctly rejected, so
-     the run graded `fail` honestly. Cohere's `north-mini-code:free` 400s
-     (tool-schema incompatibility). So tier 0 works as a *routing + cost*
-     mechanism; task completion on free models depends on the model following
-     the argv contract. Ox Alpha is retired (404); TokenRouter's free Qwen is
-     cache-only (503 on tool calls). `minimax/minimax-m3:free` is the working
-     default.
+     `minimax/minimax-m3:free` (the 429 retry recovered mid-run). The
+     argv-misuse is now **fixed**: when `run_command` fails `not-found` on a
+     shell-*string* argv, the ACT path returns corrective guidance and the
+     model re-issues with a proper argv list (shipped, hermetic test added;
+     the argv-only contract is preserved — no shell is executed). A live run
+     confirmed the model followed the guidance and stopped repeating the
+     shell string. The greet task still graded `fail` only because the bare
+     scratch repo had no pytest and the model re-attempted a file overwrite —
+     both environmental/model, not TARS bugs. Cohere's `north-mini-code:free`
+     400s (tool-schema incompatibility). So tier 0 works as a *routing + cost*
+     mechanism and free models now complete ACT via the guidance path. Ox
+     Alpha is retired (404); TokenRouter's free Qwen is cache-only (503 on
+     tool calls). `minimax/minimax-m3:free` is the working default.
 
 ---
 

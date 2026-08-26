@@ -349,9 +349,30 @@ def _orientation(recalled: Sequence[MemoryEntry]) -> tuple[Message, ...]:
 def _dispatch(toolbox: ToolDispatcher, call: ProviderToolCall) -> ToolResult:
     result = toolbox.dispatch(ToolCall(call.id, call.name, call.arguments))
     reason = result.error.split(":", 1)[0] if result.error else ""
+    if (
+        not result.ok
+        and call.name == "run_command"
+        and reason == "not-found"
+        and _looks_like_shell_string(call.arguments.get("argv"))
+    ):
+        return ToolResult.ok_result(
+            "run_command",
+            "Corrective guidance: run_command accepts an argv list, not a shell string. "
+            "Re-issue this call with the program and each argument as separate argv items "
+            '(for example: ["mkdir", "-p", "greet"]). Do not use shell syntax.',
+        )
     if not result.ok and reason in RETRYABLE_REASONS:
         return toolbox.dispatch(ToolCall(call.id, call.name, call.arguments))
     return result
+
+
+def _looks_like_shell_string(argv: object) -> bool:
+    if not isinstance(argv, list) or len(argv) != 1 or not isinstance(argv[0], str):
+        return False
+    value = argv[0]
+    return any(marker in value for marker in (" ", "&&", "|", ";")) or (
+        len(value) >= 2 and value[0] == value[-1] and value[0] in "'\""
+    )
 
 
 def _write(stream: TextIO | None, text: str) -> None:
