@@ -29,8 +29,15 @@ ANTHROPIC = "anthropic"
 OPENAI = "openai"
 OPENROUTER = "openrouter"
 AGENTROUTER = "agentrouter"
+TOKENROUTER = "tokenrouter"
 
-KNOWN_PROVIDERS: tuple[str, ...] = (ANTHROPIC, OPENAI, OPENROUTER, AGENTROUTER)
+KNOWN_PROVIDERS: tuple[str, ...] = (
+    ANTHROPIC,
+    OPENAI,
+    OPENROUTER,
+    AGENTROUTER,
+    TOKENROUTER,
+)
 
 # Bare-name patterns for the two direct-SDK providers.
 _ANTHROPIC_BARE = re.compile(r"^claude[-_.]", re.IGNORECASE)
@@ -118,11 +125,13 @@ def _default_factories() -> None:
     from .anthropic_provider import AnthropicProvider
     from .openai_provider import OpenAIProvider
     from .openrouter_provider import OpenRouterProvider
+    from .tokenrouter_provider import TokenRouterProvider
 
     register_provider(ANTHROPIC, AnthropicProvider)
     register_provider(OPENAI, OpenAIProvider)
     register_provider(OPENROUTER, OpenRouterProvider)
     register_provider(AGENTROUTER, AgentRouterProvider)
+    register_provider(TOKENROUTER, TokenRouterProvider)
 
 
 def install_default_providers() -> None:
