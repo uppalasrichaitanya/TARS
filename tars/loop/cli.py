@@ -11,6 +11,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+from importlib.metadata import version
 import os
 import sys
 from collections.abc import Callable, Sequence
@@ -48,6 +49,9 @@ def build_parser() -> argparse.ArgumentParser:
         prog=PROG,
         description="Run TARS's disciplined agent loop.",
         epilog="exit codes: 0 completed, 1 verification failed, 2 usage error, 3 provider unavailable",
+    )
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {version('tars-agent')}"
     )
     subs = parser.add_subparsers(dest="command")
     run = subs.add_parser("run", help="run one task and exit")
