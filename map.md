@@ -28,8 +28,9 @@ The spec lives in `master_agent_loop.md`. Its five non-negotiable directives:
 
 | | |
 |---|---|
-| Tests | **987 passed, 0 failed, 2 skipped** |
+| Tests | **999 passed, 0 failed, 2 skipped** |
 | `tars-verify .` | **PASS 4/4** |
+| Session persistence | **SHIPPED** (2026-08-26): append-only JSONL, `/resume [ID]`, durable `/clear`, same-root discovery in `/status`; interrupted runs never resume mid-ACT |
 | Live `/run` | **VERIFIED end-to-end through AgentRouter** (2026-08-26): classify → edit → report on a temp repo; `add(2,3) = 5` after the fix |
 | Live graded run | **VERIFIED** (2026-08-26): a repo with a real failing pytest went FAIL → PASS across one live `/run`; VERIFY graded an actual fix |
 | Runtime dependencies | **zero** (`dependencies = []`), enforced by tests |
@@ -235,7 +236,9 @@ Applied to everything above, and to everything still to come:
 3. ~~GPT-5.6 provider path~~ — **blocked on AgentRouter's client whitelist**
    (probed; see §6 item 3). Parked until a whitelisted client or new
    credentials exist.
-4. **Session persistence** — plan first, build after review (the hinge for
-   semantic recall).
-5. Then §6: tier→model routing, transient-retry, browser-test-efficient,
-   semantic recall, smaller items.
+4. **Session persistence** — shipped 2026-08-26 (commit `75b766c`); design
+   proposal lives at `.tars-proposals/session-persistence.md`. Known
+   simplification: `/status` listing reads whole files, not just first/last
+   events.
+5. Then §6 in order: tier→model routing (directive 3 enacted), transient-retry,
+   semantic recall, browser-test-efficient, smaller items.
