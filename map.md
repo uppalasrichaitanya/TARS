@@ -28,8 +28,9 @@ The spec lives in `master_agent_loop.md`. Its five non-negotiable directives:
 
 | | |
 |---|---|
-| Tests | **1008 passed, 0 failed, 2 skipped** |
+| Tests | **1015 passed, 0 failed, 2 skipped** |
 | `tars-verify .` | **PASS 4/4** |
+| Transient retry | **SHIPPED** (2026-08-26): AgentRouter 405/429/502/503 auto-retry once (2s, injectable sleeper); PLAN exhaustion interrupts, ACT exhaustion degrades to an honest report |
 | Session persistence | **SHIPPED** (2026-08-26): append-only JSONL, `/resume [ID]`, durable `/clear`, same-root discovery in `/status`; interrupted runs never resume mid-ACT |
 | Directive 3 | **ENACTED** (2026-08-26): tier 0 routes to a configurable cheap model (`TARS_TIER0_MODEL`, unset by default → honest flagship fallback); verdict line names the model each phase used |
 | Live `/run` | **VERIFIED end-to-end through AgentRouter** (2026-08-26): classify → edit → report on a temp repo; `add(2,3) = 5` after the fix |
@@ -193,8 +194,18 @@ model is live so it is never a mystery.
     each phase used. Tier 0 here means "cheapest capable model" — a
     documented adaptation of the spec's "execute directly", since ACT always
     needs a driver for tool calls.
- 6. **Transient provider errors are not auto-retried** — trap #6's rule says
-    retry once on WAF-style failures; today that retry is manual.
+ 6. ~~**Transient provider errors are not auto-retried**~~ — DONE 2026-08-26:
+    AgentRouter 405/429/502/503 retry once automatically (fixed 2s, injected
+    sleeper); PLAN exhaustion interrupts the run, ACT exhaustion continues to
+    an honest report. Never retries 401 or other providers.
+ 7. **Semantic recall for memory** — the vector side of ORIENT; only the
+    structured side exists, so ORIENT cannot yet ask "what do we know
+    *related* to this?" Needs a design decision first (embedding source vs
+    the zero-dependency constraint). Session persistence now provides the
+    corpus.
+ 8. **browser-test-efficient** — a11y-tree-first web testing via playwright;
+    the spec's "sharpest technical differentiator". The loop is now solid,
+    so this is next after semantic recall's design conversation.
 
 ---
 
@@ -245,5 +256,5 @@ Applied to everything above, and to everything still to come:
    proposal lives at `.tars-proposals/session-persistence.md`. Known
    simplification: `/status` listing reads whole files, not just first/last
    events.
-5. Then §6 in order: transient-retry, semantic recall, browser-test-efficient,
-   smaller items.
+5. Then §6 in order: semantic recall (design conversation first), then
+   browser-test-efficient, then the smaller optional items.
