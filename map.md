@@ -28,9 +28,10 @@ The spec lives in `master_agent_loop.md`. Its five non-negotiable directives:
 
 | | |
 |---|---|
-| Tests | **999 passed, 0 failed, 2 skipped** |
+| Tests | **1008 passed, 0 failed, 2 skipped** |
 | `tars-verify .` | **PASS 4/4** |
 | Session persistence | **SHIPPED** (2026-08-26): append-only JSONL, `/resume [ID]`, durable `/clear`, same-root discovery in `/status`; interrupted runs never resume mid-ACT |
+| Directive 3 | **ENACTED** (2026-08-26): tier 0 routes to a configurable cheap model (`TARS_TIER0_MODEL`, unset by default → honest flagship fallback); verdict line names the model each phase used |
 | Live `/run` | **VERIFIED end-to-end through AgentRouter** (2026-08-26): classify → edit → report on a temp repo; `add(2,3) = 5` after the fix |
 | Live graded run | **VERIFIED** (2026-08-26): a repo with a real failing pytest went FAIL → PASS across one live `/run`; VERIFY graded an actual fix |
 | Runtime dependencies | **zero** (`dependencies = []`), enforced by tests |
@@ -185,9 +186,13 @@ model is live so it is never a mystery.
  4. **Smaller, optional:** consolidate the (soon four) duplicated
     `_color`/`isatty` helpers across the CLIs; `overnight_build.sh` still has no
     lockfile and no resume point, so relaunching restarts from phase one.
- 5. **Directive 3 is classified but not enacted** — the router emits a tier,
-    yet PLAN/ACT always use `session.model`. Wiring tier→model selection
-    (e.g. tier 0 → a cheap model) would make "cheapest capable path" real.
+ 5. ~~**Directive 3 is classified but not enacted**~~ — DONE 2026-08-26:
+    tier 0 routes to a configurable cheap model (`TARS_TIER0_MODEL` env or
+    config event; unset → honest flagship fallback with an uncertainty line),
+    tiers 1-2 stay on `session.model`, and the verdict line names the model
+    each phase used. Tier 0 here means "cheapest capable model" — a
+    documented adaptation of the spec's "execute directly", since ACT always
+    needs a driver for tool calls.
  6. **Transient provider errors are not auto-retried** — trap #6's rule says
     retry once on WAF-style failures; today that retry is manual.
 
@@ -240,5 +245,5 @@ Applied to everything above, and to everything still to come:
    proposal lives at `.tars-proposals/session-persistence.md`. Known
    simplification: `/status` listing reads whole files, not just first/last
    events.
-5. Then §6 in order: tier→model routing (directive 3 enacted), transient-retry,
-   semantic recall, browser-test-efficient, smaller items.
+5. Then §6 in order: transient-retry, semantic recall, browser-test-efficient,
+   smaller items.
