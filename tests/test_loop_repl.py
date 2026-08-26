@@ -23,7 +23,7 @@ def test_repl_dispatches_status_route_help_and_exit(tmp_path: Path) -> None:
         return Classification(0, "low", True, (), "small")
 
     repl = Repl(
-        Session(root=tmp_path, model="fake"),
+        Session(root=tmp_path, model="fake", tier_models={"0": "cheap-fake"}),
         stdin=StringIO("/status\n/route fix typo\n/help\n/exit\n"),
         stdout=out,
         classify=classify,
@@ -31,6 +31,8 @@ def test_repl_dispatches_status_route_help_and_exit(tmp_path: Path) -> None:
     assert repl.run() == 0
     text = out.getvalue()
     assert "fake" in text and "tier 0" in text
+    assert '"tier_0_model": "cheap-fake"' in text
+    assert "precedence: explicit config > TARS_TIER0_MODEL env > unset" in text
     assert routed == ["fix typo"]
 
 

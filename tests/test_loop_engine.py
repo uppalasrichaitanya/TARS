@@ -137,7 +137,9 @@ def test_engine_wires_all_phases_and_reports_uncertainties(
     ]
     assert output.getvalue().index("tier 1") < output.getvalue().index("ACT")
     assert report.task == "fix it"
-    assert report.verdict == "tier 1 · medium blast · reversible"
+    assert report.verdict == (
+        "tier 1 · medium blast · reversible · PLAN model=fake · ACT model=fake"
+    )
     assert report.verification_passed is False
     assert report.uncertainties == ("uncertainty verbatim",)
     assert report.turns == 2
@@ -322,3 +324,112 @@ def test_engine_marks_failed_run_interrupted_and_never_finishes_it(
     assert types.index("run_started") < types.index("run_interrupted")
     assert "run_finished" not in types
     assert Session.load(store, session.session_id).interrupted is True
+
+
+def test_tier_zero_uses_configured_cheaper_model_for_plan_and_act(
+    tmp_path: Path,
+) -> None:
+    from tars.loop.engine import Engine
+
+    models: list[str | None] = []
+
+    def provider(_messages, _tools, model):
+        models.append(model)
+        return _response("done")
+
+    session = Session(
+        root=tmp_path,
+        model="flagship",
+        tier_models={"0": "openrouter:test-fixture/free"},
+    )
+    report = Engine(
+        provider=provider,
+        classify=lambda _task: Classification(0, "low", True, (), "small"),
+        verify=lambda **_kwargs: GateReport(root=str(tmp_path), results=()),
+    ).run(RunPromptSpec("small task"), session, output=StringIO())
+    assert models == ["openrouter:test-fixture/free", "openrouter:test-fixture/free"]
+    assert "PLAN model=openrouter:test-fixture/free" in (report.verdict or "")
+    assert "ACT model=openrouter:test-fixture/free" in (report.verdict or "")
+    assert not report.uncertainties
+
+
+def test_tier_zero_without_a_resolvable_mapping_falls_back_honestly(
+    tmp_path: Path,
+) -> None:
+    from tars.loop.engine import Engine
+
+    models: list[str | None] = []
+
+    def provider(_messages, _tools, model):
+        models.append(model)
+        return _response("done")
+
+    session = Session(root=tmp_path, model="flagship", tier_models={"0": None})
+    report = Engine(
+        provider=provider,
+        classify=lambda _task: Classification(0, "low", True, (), "small"),
+        verify=lambda **_kwargs: GateReport(root=str(tmp_path), results=()),
+    ).run(RunPromptSpec("small task"), session, output=StringIO())
+    assert models == ["flagship", "flagship"]
+    assert report.uncertainties == (
+        "tier 0 requested a cheaper model, but none is configured; used flagship",
+    )
+    assert "PLAN model=flagship" in (report.verdict or "")
+    assert "ACT model=flagship" in (report.verdict or "")
+
+
+def test_invalid_tier_zero_model_reports_unusable_not_unconfigured(
+    tmp_path: Path,
+) -> None:
+    from tars.loop.engine import Engine
+
+    models: list[str | None] = []
+
+    def provider(_messages, _tools, model):
+        models.append(model)
+        return _response("done")
+
+    session = Session(
+        root=tmp_path,
+        model="flagship",
+        tier_models={"0": "unknown-provider:model"},
+    )
+    report = Engine(
+        provider=provider,
+        classify=lambda _task: Classification(0, "low", True, (), "small"),
+        verify=lambda **_kwargs: GateReport(root=str(tmp_path), results=()),
+    ).run(RunPromptSpec("small task"), session, output=StringIO())
+    assert models == ["flagship", "flagship"]
+    assert report.uncertainties[0] == (
+        "tier 0 requested a cheaper model, but none was usable; used flagship"
+    )
+
+
+def test_provider_not_configured_on_tier_zero_falls_back_and_continues(
+    tmp_path: Path,
+) -> None:
+    from tars.loop.engine import Engine
+    from tars.providers.errors import ProviderNotConfiguredError
+
+    models: list[str | None] = []
+
+    def provider(_messages, _tools, model):
+        models.append(model)
+        if model == "openrouter:test-fixture/free":
+            raise ProviderNotConfiguredError("free unavailable")
+        return _response("done")
+
+    session = Session(
+        root=tmp_path,
+        model="flagship",
+        tier_models={"0": "openrouter:test-fixture/free"},
+    )
+    report = Engine(
+        provider=provider,
+        classify=lambda _task: Classification(0, "low", True, (), "small"),
+        verify=lambda **_kwargs: GateReport(root=str(tmp_path), results=()),
+    ).run(RunPromptSpec("small task"), session, output=StringIO())
+    assert models == ["openrouter:test-fixture/free", "flagship", "flagship"]
+    assert report.uncertainties[0] == (
+        "tier 0 requested a cheaper model, but none was usable; used flagship"
+    )

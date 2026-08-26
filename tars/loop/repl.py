@@ -189,6 +189,11 @@ class Repl:
                     f"updated={item['updated']:.0f} label={item['label']} "
                     f"verdict={item['verdict']}\n"
                 )
+        self._write(
+            f"tier_0_model: {self.session.tier_models.get('0')} "
+            f"source={self.session.tier0_source}\n"
+            "precedence: explicit config > TARS_TIER0_MODEL env > unset\n"
+        )
 
     def _resume(self, session_id: str) -> None:
         if self.session_store is None:

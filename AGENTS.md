@@ -64,6 +64,9 @@ the Codex CLI itself. Consequence: **a GPT-5.6 provider adapter for TARS is
 blocked on AgentRouter's whitelist**, not on code — do not attempt to build one
 until a client is whitelisted or different credentials exist.
 
+AgentRouter is opus-only here; set `TARS_TIER0_MODEL` to an explicitly chosen
+OpenRouter model to enable tier-0 routing.
+
 Do not go hunting for a new token, and do not try to forge a whitelisted client's
 fingerprint. Route through the official SDK — that is why
 `tars/providers/agentrouter_provider.py` subclasses the Anthropic adapter instead

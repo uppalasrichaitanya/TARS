@@ -64,6 +64,12 @@ def default_model(env: Mapping[str, str] | None = None) -> str:
     return FLAGSHIP
 
 
+def default_tier0_model(env: Mapping[str, str] | None = None) -> str | None:
+    """The cheap route is explicit because free-model ids are not stable facts."""
+    env = os.environ if env is None else env
+    return env.get("TARS_TIER0_MODEL") or None
+
+
 @dataclass
 class Session:
     """One REPL session's state. Mutable by design; nothing else here is."""
@@ -72,6 +78,7 @@ class Session:
     model: str = field(default_factory=default_model)
     #: Skip the per-edit confirmation for every run in this session.
     auto_confirm: bool = False
+    tier_models: dict[str, str | None] = field(default_factory=dict)
     session_id: str = field(default_factory=new_session_id)
     store: SessionStore | None = field(default=None, repr=False, compare=False)
 
@@ -81,8 +88,19 @@ class Session:
     #: What VERIFY last concluded, as the gate's own verdict string.
     last_verdict: str | None = None
     interrupted: bool = False
+    tier0_source: str = field(default="unset", init=False)
 
     def __post_init__(self) -> None:
+        explicit_tier0 = "0" in self.tier_models
+        tier0 = self.tier_models.get("0") if explicit_tier0 else default_tier0_model()
+        self.tier0_source = (
+            "config" if explicit_tier0 else ("env" if tier0 else "unset")
+        )
+        self.tier_models = {
+            "0": tier0,
+            "1": self.model,
+            "2": self.model,
+        }
         if self.store is not None and not self.store.path(self.session_id).exists():
             self.store.append(
                 self.session_id,
@@ -93,6 +111,7 @@ class Session:
                     "auto_confirm": self.auto_confirm,
                 },
             )
+            self.record_event("config", {"tier_models": self.tier_models})
 
     @property
     def messages(self) -> tuple[Message, ...]:
@@ -120,6 +139,7 @@ class Session:
             root=Path(str(started.get("root", "."))),
             model=str(started.get("model", default_model())),
             auto_confirm=bool(started.get("auto_confirm", False)),
+            tier_models={"0": None},
             session_id=session_id,
             store=store,
         )
@@ -146,6 +166,14 @@ class Session:
                     session.model = str(event["model"])
                 if "auto_confirm" in event:
                     session.auto_confirm = bool(event["auto_confirm"])
+                if "tier_models" in event and isinstance(event["tier_models"], dict):
+                    saved = event["tier_models"]
+                    session.tier_models = {
+                        "0": saved.get("0"),
+                        "1": session.model,
+                        "2": session.model,
+                    }
+                    session.tier0_source = "config"
             elif event["type"] == "run_interrupted":
                 session.interrupted = True
             elif event["type"] == "run_finished":
@@ -179,6 +207,7 @@ class Session:
             "model": self.model,
             "turns": len(self._messages),
             "auto_confirm": self.auto_confirm,
+            "tier_0_model": self.tier_models["0"],
             "last_tier": (
                 None
                 if self.last_classification is None

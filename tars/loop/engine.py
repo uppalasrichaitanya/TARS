@@ -8,8 +8,9 @@ from typing import Protocol, TextIO
 from .. import memory, providers, router, verification
 from ..act import RETRYABLE_REASONS
 from ..memory.types import MemoryEntry, ReflectionReport
-from ..providers import LLMResponse, Message, ToolDef
+from ..providers import LLMResponse, Message, ToolDef, resolve_model
 from ..providers import ToolCall as ProviderToolCall
+from ..providers.errors import ProviderError, ProviderNotConfiguredError
 from ..router import Classification
 from ..verification import GateReport
 from .session import Session
@@ -127,14 +128,35 @@ class Engine:
 
         recalled = self.recall(domains=(), root=session.root)
         verdict = self.classify(spec.task)
-        verdict_text = _verdict_text(verdict)
-        _write(stream, f"CLASSIFY: {verdict_text}\n")
+        phase_model, fallback = _phase_model(session, verdict.tier)
+        if fallback:
+            uncertainties.append(fallback)
 
         session.record(Message.user(spec.task))
         orientation = _orientation(recalled)
-        plan = self.provider(
-            (*orientation, *session.messages), TOOL_DEFS, session.model
-        )
+
+        def generate(model: str) -> tuple[LLMResponse, str]:
+            try:
+                return self.provider(
+                    (*orientation, *session.messages), TOOL_DEFS, model
+                ), model
+            except ProviderNotConfiguredError:
+                if verdict.tier != 0 or model == session.model:
+                    raise
+                message = (
+                    "tier 0 requested a cheaper model, but none was usable; "
+                    f"used {session.model}"
+                )
+                if message not in uncertainties:
+                    uncertainties.append(message)
+                return self.provider(
+                    (*orientation, *session.messages), TOOL_DEFS, session.model
+                ), session.model
+
+        plan, plan_model = generate(phase_model)
+        phase_model = plan_model
+        verdict_text = _verdict_text(verdict, plan_model, phase_model)
+        _write(stream, f"CLASSIFY: {verdict_text}\n")
         turns = 1
         session.record(Message.assistant(plan.text or None, tool_calls=plan.tool_calls))
 
@@ -167,10 +189,9 @@ class Engine:
             Message.user("Act on the plan above. Use the available tools when needed.")
         )
         action = plan
+        act_model = phase_model
         while turns < spec.max_turns:
-            action = self.provider(
-                (*orientation, *session.messages), TOOL_DEFS, session.model
-            )
+            action, act_model = generate(act_model)
             turns += 1
             session.record(
                 Message.assistant(action.text or None, tool_calls=action.tool_calls)
@@ -199,6 +220,7 @@ class Engine:
         reflection = self.propose(session.as_messages(), root=str(session.root))
         uncertainties.extend(reflection.notes)
 
+        verdict_text = _verdict_text(verdict, plan_model, act_model)
         report = RunReport(
             task=spec.task,
             verdict=verdict_text,
@@ -213,9 +235,35 @@ class Engine:
         return report
 
 
-def _verdict_text(verdict: Classification) -> str:
+def _verdict_text(verdict: Classification, plan_model: str, act_model: str) -> str:
     reversible = "reversible" if verdict.reversible else "not reversible"
-    return f"tier {verdict.tier} · {verdict.blast} blast · {reversible}"
+    return (
+        f"tier {verdict.tier} · {verdict.blast} blast · {reversible} · "
+        f"PLAN model={plan_model} · ACT model={act_model}"
+    )
+
+
+def _phase_model(session: Session, tier: int) -> tuple[str, str | None]:
+    """Interpret tier 0 as the cheapest capable model.
+
+    The spec says tier 0 may execute directly. TARS deliberately still selects a
+    model because its ACT phase always needs a driver for tool calls; cheap here
+    means the cheapest configured model capable of driving that loop.
+    """
+    configured = session.tier_models.get(str(tier))
+    if tier != 0:
+        return configured or session.model, None
+    if configured:
+        try:
+            resolve_model(configured)
+        except (ProviderError, ValueError):
+            pass
+        else:
+            return configured, None
+    reason = "none was usable" if configured else "none is configured"
+    return session.model, (
+        f"tier 0 requested a cheaper model, but {reason}; used {session.model}"
+    )
 
 
 def _orientation(recalled: Sequence[MemoryEntry]) -> tuple[Message, ...]:

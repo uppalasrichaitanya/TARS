@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tars.loop.session import Session, default_model
+from tars.loop.session import Session, default_model, default_tier0_model
 from tars.providers import Message, ToolCall
 
 
@@ -142,3 +142,45 @@ def test_with_no_credentials_at_all_the_default_is_still_nameable():
 def test_an_auth_token_without_a_base_url_is_not_assumed_to_be_agentrouter():
     """ANTHROPIC_AUTH_TOKEN alone could be a direct Anthropic bearer token."""
     assert default_model({"ANTHROPIC_AUTH_TOKEN": "sk-x"}) == "claude-opus-5"
+
+
+def test_tier_zero_model_is_unset_unless_configured() -> None:
+    assert default_tier0_model({}) is None
+    assert (
+        default_tier0_model({"TARS_TIER0_MODEL": "openrouter:test-fixture/free"})
+        == "openrouter:test-fixture/free"
+    )
+
+
+def test_tier_model_map_defaults_higher_tiers_to_session_model() -> None:
+    session = Session(model="flagship", tier_models={"0": None})
+    assert session.tier_models == {"0": None, "1": "flagship", "2": "flagship"}
+
+
+def test_explicit_tier_zero_config_beats_environment(monkeypatch) -> None:
+    monkeypatch.setenv("TARS_TIER0_MODEL", "openrouter:env/free")
+    session = Session(model="flagship", tier_models={"0": "openrouter:config/free"})
+    assert session.tier_models["0"] == "openrouter:config/free"
+    assert session.tier0_source == "config"
+
+
+def test_environment_tier_zero_source_is_reported(monkeypatch) -> None:
+    monkeypatch.setenv("TARS_TIER0_MODEL", "openrouter:env/free")
+    session = Session(model="flagship")
+    assert session.tier_models["0"] == "openrouter:env/free"
+    assert session.tier0_source == "env"
+
+
+def test_tier_model_map_round_trips_through_config_event(tmp_path: Path) -> None:
+    from tars.loop.session_store import SessionStore
+
+    store = SessionStore(tmp_path / "sessions")
+    session = Session(
+        root=tmp_path,
+        model="flagship",
+        tier_models={"0": "openrouter:test-fixture/free"},
+        session_id="saved",
+        store=store,
+    )
+    loaded = Session.load(store, "saved")
+    assert loaded.tier_models == session.tier_models
