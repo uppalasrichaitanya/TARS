@@ -47,7 +47,14 @@ def transcript(tmp_path, text=DECISION):
 
 
 def test_the_documented_entry_points_are_exported():
-    for name in ("reflect_on", "remember", "recall", "propose", "ReflectionReport"):
+    for name in (
+        "reflect_on",
+        "remember",
+        "recall",
+        "recall_related",
+        "propose",
+        "ReflectionReport",
+    ):
         assert name in pkg.__all__, name
 
 

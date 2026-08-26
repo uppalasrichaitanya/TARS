@@ -151,11 +151,11 @@ reflect_on("run/session.jsonl").nothing_worth_remembering
     - `tars/memory/domains.py` — Which partition does a fact belong to, and what said so.
     - `tars/memory/propose.py` — The REFLECT pass: read a transcript, propose what is worth remembering.
     - `tars/memory/signals.py` — Detectors for the sentence in core directive 4.
+    - `tars/memory/similarity.py` — Small lexical similarity for memory retrieval without an embedding service.
     - `tars/memory/store.py` — Where kept entries live: domain-partitioned JSON, plus one review queue.
     - `tars/memory/transcript.py` — Turning whatever the loop kept into turns the writer can quote.
     - `tars/memory/types.py` — Types the memory writer speaks: what a candidate is, and what makes one
-  - `tars/providers/__init__.py` — TARS provider adapter layer.
-- …and 27 more modules
+- …and 28 more modules
 
 Tests live in `tests/`.
 

@@ -88,7 +88,7 @@ class Engine:
         self,
         *,
         provider: ProviderCall = providers.generate,
-        recall: Callable[..., tuple[MemoryEntry, ...]] = memory.recall,
+        recall: Callable[..., tuple[MemoryEntry, ...]] = memory.recall_related,
         classify: Callable[[str], Classification] = router.classify,
         verify: Callable[..., GateReport] = verification.verify,
         propose: Callable[..., ReflectionReport] = memory.propose,
@@ -134,7 +134,7 @@ class Engine:
         touched: list[str] = []
         declined: list[str] = []
 
-        recalled = self.recall(domains=(), root=session.root)
+        recalled = self.recall(spec.task, root=session.root)
         verdict = self.classify(spec.task)
         phase_model, fallback = _phase_model(session, verdict.tier)
         if fallback:

@@ -64,8 +64,9 @@ def test_engine_wires_all_phases_and_reports_uncertainties(
 
         return NoopToolbox()
 
-    def recall(*, root: Path, **_kwargs):
+    def recall(query: str, *, root: Path, **_kwargs):
         events.append("orient")
+        assert query == "fix it"
         return (
             MemoryEntry(
                 id="decision-1",

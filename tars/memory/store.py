@@ -1,9 +1,9 @@
 """Where kept entries live: domain-partitioned JSON, plus one review queue.
 
 Plain files, one per partition, under `.tars/memory/`. No index, no database, no
-embedding — retrieval in this design is *by domain*, which a directory listing
-already does, and a memory a person can open in an editor and correct is worth
-more here than a fast one.
+embedding. Domain recall reads named partitions directly; related recall scans
+the small live corpus with lexical TF-IDF. A memory a person can open in an
+editor and correct is worth more here than a fast opaque index.
 
 Four properties are load-bearing, and each is a rule from the spec rather than a
 storage preference:
@@ -38,6 +38,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .similarity import cosine_similarities
 from .types import Candidate, MemoryEntry, ReflectionReport
 
 #: Where entries live, relative to the repo root.
@@ -195,6 +196,34 @@ class MemoryStore:
             found = [e for e in found if e.kind in wanted]
         found.sort(key=lambda e: (-e.confidence, e.id))
         return tuple(found[:limit] if limit is not None else found)
+
+    def recall_related(
+        self,
+        query: str,
+        *,
+        limit: int | None = None,
+        kinds: Sequence[str] = (),
+    ) -> tuple[MemoryEntry, ...]:
+        """Live entries related to `query`, across domains, strongest first.
+
+        This is lexical similarity, so a pure paraphrase with no shared words
+        will not match. That limitation is accepted to keep memory local,
+        deterministic, and free of runtime dependencies or embedding APIs.
+        """
+        found = [entry for entry in self.entries() if entry.live]
+        if kinds:
+            wanted = {kind.lower() for kind in kinds}
+            found = [entry for entry in found if entry.kind in wanted]
+
+        scores = cosine_similarities(query, [entry.text for entry in found])
+        ranked = [
+            (score, entry)
+            for score, entry in zip(scores, found, strict=True)
+            if score > 0
+        ]
+        ranked.sort(key=lambda item: (-item[0], -item[1].confidence, item[1].id))
+        entries = [entry for _, entry in ranked]
+        return tuple(entries[:limit] if limit is not None else entries)
 
     def pending(self) -> tuple[Candidate, ...]:
         """The review queue, in the order it was written."""

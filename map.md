@@ -28,7 +28,7 @@ The spec lives in `master_agent_loop.md`. Its five non-negotiable directives:
 
 | | |
 |---|---|
-| Tests | **1029 passed, 0 failed, 2 skipped** |
+| Tests | **1035 passed, 0 failed, 2 skipped** |
 | `tars-verify .` | **PASS 4/4** |
 | Transient retry | **SHIPPED + hardened** (2026-08-26): 405/429/502/503 from **any** provider (not just AgentRouter) now retry, up to 3 attempts with exponential backoff (2s, 4s, injectable sleeper); PLAN exhaustion interrupts, ACT exhaustion degrades to an honest report. Previously gated to `agentrouter` only, so OpenRouter/TokenRouter 429/503 raised immediately — fatal for free tier-0 |
 | Session persistence | **SHIPPED** (2026-08-26): append-only JSONL, `/resume [ID]`, durable `/clear`, same-root discovery in `/status`; interrupted runs never resume mid-ACT |
@@ -55,7 +55,7 @@ Known caveats, stated plainly:
 | `tars/providers` | — | one `generate(messages, tools, model)`; Anthropic + OpenAI direct SDKs, OpenRouter over stdlib HTTP, **AgentRouter**, **TokenRouter** | live on `claude-opus-5` (tool round-trip) and `tokenrouter:qwen/qwen3.8-max-free` (tool round-trip); OpenAI + OpenRouter unit-tested only |
 | `tars/verification` | VERIFY | detects a repo's check surface (test/lint/typecheck/format) and runs it uniformly | runs on TARS itself as `tars-verify` |
 | `tars/readme` | — | generates a README from real code, with `--check` for CI | this repo's README is its own output, committed verbatim |
-| `tars/memory` | REFLECT | scored, domain-tagged candidates; human review queue; supersede-marks, never deletes | 76-statement hand-labelled corpus, every floor met |
+| `tars/memory` | REFLECT | scored, domain-tagged candidates; human review queue; supersede-marks, never deletes; **`recall_related`** lexically ranks live entries across domains for ORIENT | 76-statement hand-labelled corpus, every floor met; `recall_related` hermetic + zero-dep guard |
 | `tars/router` | CLASSIFY | tier 0/1/2 + blast radius + reversibility, with named signals | tier **1.00 dev / 1.00 holdout** vs a 0.33 majority baseline |
 | `tars/act` | ACT | anchored edits, no partial writes, argv-only commands | end-to-end in a temp repo against the gate |
 
@@ -176,10 +176,15 @@ model is live so it is never a mystery.
    says to save it until the loop is solid. Needs `playwright`. Note it is in the
    spec's skills list but was never in `overnight_build.sh`'s phase list, so the
    overnight run was never going to build it.
-2. **Semantic recall for memory** — the spec wants your existing vector DB on the
-   embedded side, with JSON/SQLite for the structured side. Only the structured
-   side exists, so ORIENT cannot yet ask "what do we know *related* to this?" The
-   spec calls this "the real synergy point".
+ 2. **Semantic recall for memory — SHIPPED (lexical, zero-dep).** ORIENT now asks
+    "what do we know *related* to this?" via `MemoryStore.recall_related(query)`:
+    corpus-local TF-IDF cosine over the live entries, ranked across domains, live
+    entries only, pending/superseded excluded, tie-break by confidence. Deliberately
+    lexical (`tars/memory/similarity.py`, stdlib `math`/`re`/`collections`) to honor
+    the zero-dependency invariant — true embeddings would need a dependency or
+    external API. Accepted limitation (documented in code): pure paraphrases with no
+    shared words don't match. The zero-dep guard test (`test_the_memory_writer_needs_no_third_party_package`)
+    covers it transitively. Gate PASS 4/4 (1035 passed); `tars-readme --check` exit 0.
  3. **GPT-5.6 path — BLOCKED on AgentRouter's client whitelist.** Probed
     2026-08-26 with the codex key: the `/v1` surface 401s the official OpenAI
     SDK on both `/chat/completions` and `/responses` (`unauthorized_client_error`),
@@ -203,11 +208,9 @@ model is live so it is never a mystery.
      OpenRouter/TokenRouter throttling raise immediately — fatal once tier 0
      started using those free hosts. PLAN exhaustion interrupts, ACT exhaustion
      degrades to an honest report. Never retries 401.
- 7. **Semantic recall for memory** — the vector side of ORIENT; only the
-    structured side exists, so ORIENT cannot yet ask "what do we know
-    *related* to this?" Needs a design decision first (embedding source vs
-    the zero-dependency constraint). Session persistence now provides the
-    corpus.
+ 7. **Semantic recall for memory** — SHIPPED; see item 2. Built lexical/zero-dep
+    (no embedding source needed), so the design decision resolved to "keep memory
+    local and dependency-free". Session persistence provides the corpus it scans.
   8. **browser-test-efficient** — a11y-tree-first web testing via playwright;
      the spec's "sharpest technical differentiator". The loop is now solid,
      so this is next after semantic recall's design conversation.

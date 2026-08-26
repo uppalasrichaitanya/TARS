@@ -43,15 +43,19 @@ rest wait in a review queue that `recall` cannot see:
 
     remember(reflect_on("run/session.jsonl"))
 
-`recall` is the other end, and the one ORIENT uses: live entries for a domain,
-strongest first. Superseded entries stay on disk and readable but stop coming
-back from here, because "we used to think X" is worth keeping and worth not
-acting on:
+`recall` retrieves live entries by domain, strongest first. `recall_related` is
+the path ORIENT uses to rank live entries across domains against the task text.
+Superseded entries stay on disk and readable but stop coming back from either,
+because "we used to think X" is worth keeping and worth not acting on:
 
     from tars.memory import recall
 
     recall(domains=("providers",))
     recall(kinds=("constraint",), limit=5)
+
+    from tars.memory import recall_related
+
+    recall_related("retry a transient provider failure", limit=5)
 
 Domains are tagged only from explicit evidence — a path, a keyword, a name the
 statement actually contains. Cross-cutting entries get every domain they name and
@@ -161,6 +165,22 @@ def recall(
     )
 
 
+def recall_related(
+    query: str,
+    *,
+    limit: int | None = None,
+    kinds: Sequence[str] = (),
+    root: str | Path = ".",
+) -> tuple[MemoryEntry, ...]:
+    """Recall live entries lexically related to a task across all domains.
+
+    Pure paraphrases with no shared words do not match. This is the deliberate
+    tradeoff for deterministic local retrieval with no embedding dependency or
+    external API.
+    """
+    return MemoryStore(root=Path(root)).recall_related(query, limit=limit, kinds=kinds)
+
+
 __all__ = [
     "COMMIT_THRESHOLD",
     "DEFAULT_DOMAINS",
@@ -186,6 +206,7 @@ __all__ = [
     "parse_transcript",
     "propose",
     "recall",
+    "recall_related",
     "reflect_on",
     "remember",
     "score",
