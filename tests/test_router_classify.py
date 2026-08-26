@@ -45,6 +45,28 @@ def test_edits_with_no_decision_left_are_tier_zero(task):
 @pytest.mark.parametrize(
     "task",
     [
+        (
+            "Create a Python package 'greet' with a function hello() returning the "
+            "string 'hello world', and a pytest file test_greet.py asserting "
+            "hello()=='hello world'. Make both files, then run the test to confirm "
+            "it passes."
+        ),
+        "Create a new file utils.py with a function add(a, b) returning a + b.",
+        "Scaffold a CLI module with a single main() entry point.",
+    ],
+)
+def test_fully_specified_creation_is_tier_zero(task):
+    """Green-field, fully-specified artifacts carry no design decision.
+
+    This is the canonical tier-0 workload the TARS_TIER0_MODEL feature exists
+    to offload to a cheap model; routing it to the flagship wastes that.
+    """
+    assert tier_of(task) == 0
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
         "Design the loop orchestrator that wires the modules together.",
         "Migrate the store from JSON to SQLite.",
         "Harden the store against two runs writing concurrently.",

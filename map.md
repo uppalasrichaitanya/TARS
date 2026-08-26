@@ -28,7 +28,7 @@ The spec lives in `master_agent_loop.md`. Its five non-negotiable directives:
 
 | | |
 |---|---|
-| Tests | **1024 passed, 0 failed, 2 skipped** |
+| Tests | **1027 passed, 0 failed, 2 skipped** |
 | `tars-verify .` | **PASS 4/4** |
 | Transient retry | **SHIPPED** (2026-08-26): AgentRouter 405/429/502/503 auto-retry once (2s, injectable sleeper); PLAN exhaustion interrupts, ACT exhaustion degrades to an honest report |
 | Session persistence | **SHIPPED** (2026-08-26): append-only JSONL, `/resume [ID]`, durable `/clear`, same-root discovery in `/status`; interrupted runs never resume mid-ACT |
@@ -36,6 +36,7 @@ The spec lives in `master_agent_loop.md`. Its five non-negotiable directives:
 | Live `/run` | **VERIFIED end-to-end through AgentRouter** (2026-08-26): classify → edit → report on a temp repo; `add(2,3) = 5` after the fix |
 | Live graded run | **VERIFIED** (2026-08-26): a repo with a real failing pytest went FAIL → PASS across one live `/run`; VERIFY graded an actual fix |
 | TokenRouter provider | **SHIPPED** (2026-08-26): OpenAI-compatible free surface (`api.tokenrouter.com/v1`); `tokenrouter:`/`tokenrouter/` prefixes, slashed model ids preserved; `OPENAI_API_KEY` deliberately never consulted (reads `TOKENROUTER_API_KEY` only). Live-verified `qwen/qwen3.8-max-free` plain call + tool round-trip. Tier-0 now defaults here because `stealth/ox-alpha`'s free endpoint was empty at check time |
+| Tier-0 creation routing | **FIXED** (2026-08-26): CLASSIFY defaulted every unspecified task to tier 1, so a fully-specified green-field "create package/function/test" task was sent to the flagship instead of the `TARS_TIER0_MODEL`. Added `cue:create-artifact` + `cue:scaffold` (tier 0) and 4 labeled dataset cases; router accuracy still 1.00 dev / 1.00 holdout |
 | Runtime dependencies | **zero** (`dependencies = []`), enforced by tests |
 
 Known caveats, stated plainly:

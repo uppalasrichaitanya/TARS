@@ -82,6 +82,13 @@ _TIER_CUES: tuple[tuple[str, str, int], ...] = (
     (r"\bcommented[- ]out\b|\bdead code\b", "cue:dead-code", 0),
     (r"\btrace\b|\bwhich module\b|\breport the file\b", "cue:lookup", 0),
     (r"\blabels?\b|\bwording\b", "cue:label", 0),
+    # tier 0 — green-field, fully-specified artifacts: no design decision left
+    (
+        r"\bcreate\b(?=.{0,30}\b(package|module|file|class|function|method)\b)",
+        "cue:create-artifact",
+        0,
+    ),
+    (r"\bscaffold\b", "cue:scaffold", 0),
     # tier 1 — contained, an existing pattern to follow
     (
         r"\b(add|adds|adding|support|accept)\b(?=.{0,40}\b(flags?|options?)\b)",
