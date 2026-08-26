@@ -7,6 +7,7 @@ the loader remains strict enough that corruption is never mistaken for history.
 from __future__ import annotations
 
 import json
+import os
 import uuid
 import warnings
 from pathlib import Path
@@ -45,6 +46,7 @@ class SessionStore:
                 json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n"
             )
             handle.flush()
+            os.fsync(handle.fileno())
         return event_id
 
     def append_raw(self, path: Path, event: dict[str, Any]) -> None:

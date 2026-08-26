@@ -185,6 +185,38 @@ def test_repl_handles_eof_and_ctrl_c_cleanly(tmp_path: Path) -> None:
     assert "cancelled" in out.getvalue()
 
 
+def test_ctrl_c_during_engine_run_returns_to_prompt_and_persists_interruption(
+    tmp_path: Path,
+) -> None:
+    from tars.loop.repl import Repl
+    from tars.loop.session_store import SessionStore
+
+    store = SessionStore(tmp_path / "sessions")
+    session = Session(root=tmp_path, model="fake", store=store)
+
+    class InterruptingEngine:
+        def run(self, spec, session, *, output):
+            session.interrupted = True
+            session.record_event("run_interrupted", {"task": spec.task})
+            raise KeyboardInterrupt
+
+    out = StringIO()
+    repl = Repl(
+        session,
+        stdin=StringIO("/run wait forever\n/status\n/exit\n"),
+        stdout=out,
+        engine=InterruptingEngine(),
+    )
+
+    assert repl.run() == 0
+    event_types = [event["type"] for event in store.load(session.session_id)]
+    assert "run_interrupted" in event_types
+    assert "run_finished" not in event_types
+    assert session.interrupted is True
+    assert "cancelled" in out.getvalue()
+    assert '"interrupted": true' in out.getvalue()
+
+
 def test_repl_dispatches_verify_memory_approve_and_pillars(tmp_path: Path) -> None:
     from tars.loop.repl import Repl
 

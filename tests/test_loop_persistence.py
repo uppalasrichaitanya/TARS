@@ -1,10 +1,18 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
 from tars.loop.session_store import SessionStore
+
+
+def test_session_append_flushes_and_fsyncs(tmp_path: Path) -> None:
+    store = SessionStore(tmp_path / "sessions")
+    with patch("tars.loop.session_store.os.fsync") as fsync:
+        store.append("saved", "run_interrupted", {"task": "stop"})
+    fsync.assert_called_once()
 
 
 def test_store_appends_versioned_events_and_loads_idempotently(tmp_path: Path) -> None:

@@ -119,6 +119,11 @@ class Repl:
                 self._write(f"unknown command: {command}; try /help\n")
         except ProviderError as exc:
             self._write(provider_message(exc) + "\n")
+        except KeyboardInterrupt:
+            if not self.session.interrupted:
+                self.session.interrupted = True
+                self.session.record_event("run_interrupted", {"task": argument})
+            self._write("cancelled\n")
         except (OSError, TypeError, ValueError, AttributeError) as exc:
             self._write(f"error: {exc}\n")
         return False
