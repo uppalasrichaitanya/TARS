@@ -30,6 +30,19 @@ def paint(text: str, code: str, *, enabled: bool) -> str:
     return f"\033[{code}m{text}\033[0m" if enabled else text
 
 
+def color_diff(diff: str, stream: TextIO) -> str:
+    """Color unified additions/removals only when output is a TTY."""
+    enabled = color_enabled(stream)
+    lines = []
+    for line in diff.splitlines(keepends=True):
+        if enabled and line.startswith("+") and not line.startswith("+++"):
+            line = paint(line, "32", enabled=True)
+        elif enabled and line.startswith("-") and not line.startswith("---"):
+            line = paint(line, "31", enabled=True)
+        lines.append(line)
+    return "".join(lines)
+
+
 def provider_message(exc: ProviderError) -> str:
     if isinstance(exc, ProviderNotConfiguredError):
         return (

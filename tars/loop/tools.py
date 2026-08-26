@@ -9,6 +9,7 @@ exceptions into the loop.
 from __future__ import annotations
 
 import subprocess
+from difflib import get_close_matches
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
@@ -125,7 +126,7 @@ class Toolbox:
                 "read_file", f"path {path!r} is outside the repo root"
             )
         if not target.is_file():
-            return ToolResult.error_result("read_file", f"file not found: {path}")
+            return ToolResult.error_result("read_file", _missing_file(self.root, path))
         try:
             return ToolResult.ok_result("read_file", target.read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError) as exc:
@@ -378,3 +379,14 @@ def _git_status(root: Path) -> dict[str, str]:
     if result.returncode != 0:
         return {}
     return {line[3:].strip(): line[:2] for line in result.stdout.splitlines()}
+
+
+def _missing_file(root: Path, path: str) -> str:
+    candidates = [
+        str(item.relative_to(root))
+        for item in root.rglob(Path(path).name)
+        if item.is_file() and ".git" not in item.parts
+    ]
+    match = get_close_matches(path, candidates, n=1, cutoff=0.3)
+    suffix = f" - did you mean {match[0]}?" if match else ""
+    return f"file not found: {path}{suffix}"

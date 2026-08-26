@@ -23,6 +23,14 @@ def test_read_file_refuses_escape(tmp_path: Path) -> None:
     assert "outside" in result.text
 
 
+def test_read_file_suggests_a_near_miss(tmp_path: Path) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "foo.py").write_text("pass\n", encoding="utf-8")
+    result = Toolbox(tmp_path).dispatch(ToolCall("1", "read_file", {"path": "foo.py"}))
+    assert not result.ok
+    assert "did you mean src/foo.py?" in result.text
+
+
 def test_list_dir_is_sorted_and_relative(tmp_path: Path) -> None:
     (tmp_path / "b.txt").write_text("", encoding="utf-8")
     (tmp_path / "a.txt").write_text("", encoding="utf-8")

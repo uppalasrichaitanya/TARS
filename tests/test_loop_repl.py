@@ -94,6 +94,14 @@ def test_bare_prompt_runs_the_full_workflow(tmp_path: Path) -> None:
     assert seen == ["Fix bug in foo.py"]
 
 
+def test_completion_offers_slash_commands_and_paths(tmp_path: Path) -> None:
+    from tars.loop.repl import completion_candidates
+
+    (tmp_path / "source.py").write_text("", encoding="utf-8")
+    assert "/verify" in completion_candidates("/ver", tmp_path)
+    assert "source.py" in completion_candidates("sou", tmp_path)
+
+
 def _git(root: Path, *args: str) -> str:
     return subprocess.run(
         ["git", *args], cwd=root, check=True, capture_output=True, text=True

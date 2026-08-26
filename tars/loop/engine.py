@@ -20,6 +20,7 @@ from ..providers.errors import (
 from ..router import Classification
 from ..verification import GateReport
 from .session import Session
+from ._io import color_diff
 from .tools import Toolbox
 from .types import RunPromptSpec, RunReport, ToolCall, ToolResult
 
@@ -250,6 +251,9 @@ class Engine:
         _write(
             stream, f"CLASSIFY: {_verdict_text(verdict, phase_model, phase_model)}\n"
         )
+        _write(
+            stream, f"PLAN: tier={verdict.tier} model={phase_model} turn=1 waiting\n"
+        )
         plan_result = generate_with_fallback(phase_model)
         assert plan_result is not None
         plan, plan_model = plan_result
@@ -259,7 +263,15 @@ class Engine:
         session.record(Message.assistant(plan.text or None, tool_calls=plan.tool_calls))
 
         _write(stream, "ACT\n")
-        confirm = (lambda _preview: True) if spec.auto_confirm else None
+
+        def confirm(preview: str) -> bool:
+            if spec.auto_confirm:
+                return True
+            if stream is not None:
+                stream.write(color_diff(preview, stream))
+                stream.flush()
+            return False
+
         session.ensure_checkpoint()
         toolbox = self.toolbox(
             session.root, confirm=confirm, on_mutation=session.note_mutation
@@ -308,6 +320,10 @@ class Engine:
         if not act_provider_failed and action.tool_calls and turns >= spec.max_turns:
             uncertainties.append("max_turns reached while tool calls remained.")
 
+        _write(
+            stream,
+            f"VERIFY: tier={verdict.tier} model={act_model} turn={turns} waiting\n",
+        )
         gate = self.verify(root=session.root)
         if spec.web is not None:
             web_gate = self.verify_web(

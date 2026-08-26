@@ -11,7 +11,6 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
-from importlib.metadata import version
 import os
 import sys
 from collections.abc import Callable, Sequence
@@ -19,6 +18,7 @@ from pathlib import Path
 from typing import NoReturn, TextIO
 
 from .. import router
+from .. import __version__
 from ..providers.errors import ProviderError
 from ..router import Classification
 from ._io import provider_message
@@ -51,7 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
         epilog="exit codes: 0 completed, 1 verification failed, 2 usage error, 3 provider unavailable",
     )
     parser.add_argument(
-        "--version", action="version", version=f"%(prog)s {version('tars-agent')}"
+        "--version", action="version", version=f"%(prog)s {__version__}"
     )
     subs = parser.add_subparsers(dest="command")
     run = subs.add_parser("run", help="run one task and exit")

@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import sys
 from collections.abc import Callable
+from difflib import get_close_matches
+from pathlib import Path
 from typing import Protocol, TextIO
 
 from .. import memory, router, verification
@@ -67,6 +69,8 @@ class Repl:
         self.store = store or MemoryStore(root=self.session.root)
         self._color = color_enabled(self.stdout)
         self._prompt = is_tty(self.stdout)
+        if self._prompt and is_tty(self.stdin):
+            _install_completion(self.session.root)
 
     def run(self) -> int:
         while True:
@@ -116,7 +120,11 @@ class Repl:
             elif command == "/pillars":
                 self._pillars()
             else:
-                self._write(f"unknown command: {command}; try /help\n")
+                suggestion = get_close_matches(command, _SLASH_COMMANDS, n=1)
+                hint = (
+                    f"; did you mean {suggestion[0]}?" if suggestion else "; try /help"
+                )
+                self._write(f"unknown command: {command}{hint}\n")
         except ProviderError as exc:
             self._write(provider_message(exc) + "\n")
         except KeyboardInterrupt:
@@ -237,12 +245,47 @@ class Repl:
 
     def _help(self) -> None:
         self._write(
-            "/run <task>  /route <task>  /verify  /memory  /memory approve <id>\n"
-            "/status  /resume [ID]  /undo  /clear  /pillars  /help  /exit\n"
+            "workflow: /run <task>  /route <task>  /verify  /memory [approve <id>]\n"
+            "info: /status  /resume [ID]  /undo  /clear  /pillars  /help  /exit\n"
         )
 
     def _write(self, text: str) -> None:
         self.stdout.write(paint(text, "32", enabled=self._color))
+
+
+def completion_candidates(prefix: str, root: Path) -> list[str]:
+    if prefix.startswith("/"):
+        return [cmd for cmd in _SLASH_COMMANDS if cmd.startswith(prefix)]
+    return sorted(path.name for path in root.iterdir() if path.name.startswith(prefix))
+
+
+def _install_completion(root: Path) -> None:
+    try:
+        import readline
+    except ImportError:  # pragma: no cover - platform dependent
+        return
+
+    def complete(text: str, state: int) -> str | None:
+        matches = completion_candidates(text, root)
+        return matches[state] if state < len(matches) else None
+
+    readline.set_completer(complete)
+    readline.parse_and_bind("tab: complete")
+
+
+_SLASH_COMMANDS = (
+    "/run",
+    "/route",
+    "/verify",
+    "/memory",
+    "/status",
+    "/resume",
+    "/undo",
+    "/clear",
+    "/pillars",
+    "/help",
+    "/exit",
+)
 
 
 def _verdict(verdict: Classification) -> str:

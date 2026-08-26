@@ -34,6 +34,23 @@ def test_color_enabled_requires_tty_and_respects_no_color(monkeypatch) -> None:
     assert not color_enabled(stream, no_color=True)
 
 
+def test_diff_color_respects_tty_and_no_color(monkeypatch) -> None:
+    from tars.loop._io import color_diff
+    monkeypatch.delenv("NO_COLOR", raising=False)
+
+    class TTY:
+        def isatty(self) -> bool:
+            return True
+
+    diff = "--- a.py\n+++ a.py\n-old\n+new\n"
+    colored = color_diff(diff, TTY())
+    assert "\033[31m-old" in colored
+    assert "\033[32m+new" in colored
+    monkeypatch.setenv("NO_COLOR", "1")
+    assert "\033[" not in color_diff(diff, TTY())
+    assert "\033[" not in color_diff(diff, object())
+
+
 def test_paint_wraps_text_only_when_enabled() -> None:
     assert paint("PASS", "32", enabled=True) == "\033[32mPASS\033[0m"
     assert paint("PASS", "32", enabled=False) == "PASS"
