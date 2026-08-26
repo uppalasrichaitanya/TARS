@@ -5,6 +5,8 @@ from __future__ import annotations
 from io import StringIO
 from pathlib import Path
 
+import pytest
+
 from tars.loop.session import Session
 from tars.loop.types import RunPromptSpec, ToolResult
 from tars.loop.types import ToolCall as LoopToolCall
@@ -300,3 +302,23 @@ def test_successful_run_command_is_reported_as_touched(tmp_path: Path) -> None:
         toolbox=lambda *_args, **_kwargs: FakeToolbox(),
     ).run(RunPromptSpec("create it"), session, output=StringIO())
     assert report.touched == ("touch created.txt",)
+
+
+def test_engine_marks_failed_run_interrupted_and_never_finishes_it(
+    tmp_path: Path,
+) -> None:
+    from tars.loop.engine import Engine
+    from tars.loop.session_store import SessionStore
+
+    store = SessionStore(tmp_path / "sessions")
+    session = Session(root=tmp_path, model="fake", store=store)
+
+    def broken(*_args, **_kwargs):
+        raise RuntimeError("provider stopped")
+
+    with pytest.raises(RuntimeError, match="provider stopped"):
+        Engine(provider=broken).run(RunPromptSpec("task"), session, output=StringIO())
+    types = [event["type"] for event in store.load(session.session_id)]
+    assert types.index("run_started") < types.index("run_interrupted")
+    assert "run_finished" not in types
+    assert Session.load(store, session.session_id).interrupted is True

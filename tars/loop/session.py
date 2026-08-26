@@ -16,17 +16,25 @@ mappings, not provider types.
 from __future__ import annotations
 
 import os
+import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from ..providers import Message
 from ..router import Classification
+from .session_store import SessionStore
 
 #: The flagship. The loop's router is what steps down to something cheaper, so
 #: the default here is deliberately the capable model, not the frugal one.
 FLAGSHIP = "claude-opus-5"
+
+
+def new_session_id(now: datetime | None = None, *, suffix: str | None = None) -> str:
+    stamp = (now or datetime.now(UTC)).astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")
+    return f"{stamp}-{suffix or uuid.uuid4().hex[:4]}"
 
 
 def default_model(env: Mapping[str, str] | None = None) -> str:
@@ -64,12 +72,27 @@ class Session:
     model: str = field(default_factory=default_model)
     #: Skip the per-edit confirmation for every run in this session.
     auto_confirm: bool = False
+    session_id: str = field(default_factory=new_session_id)
+    store: SessionStore | None = field(default=None, repr=False, compare=False)
 
     _messages: list[Message] = field(default_factory=list, repr=False)
     #: What CLASSIFY last decided, so /run can report what /route already showed.
     last_classification: Classification | None = None
     #: What VERIFY last concluded, as the gate's own verdict string.
     last_verdict: str | None = None
+    interrupted: bool = False
+
+    def __post_init__(self) -> None:
+        if self.store is not None and not self.store.path(self.session_id).exists():
+            self.store.append(
+                self.session_id,
+                "session_started",
+                {
+                    "root": str(self.root.resolve()),
+                    "model": self.model,
+                    "auto_confirm": self.auto_confirm,
+                },
+            )
 
     @property
     def messages(self) -> tuple[Message, ...]:
@@ -79,6 +102,55 @@ class Session:
     def record(self, *messages: Message) -> None:
         """Append turns to the transcript."""
         self._messages.extend(messages)
+        if self.store is not None:
+            for message in messages:
+                self.store.append(self.session_id, "message", _message_data(message))
+
+    def record_event(self, event_type: str, data: dict[str, Any]) -> None:
+        if self.store is not None:
+            self.store.append(self.session_id, event_type, data)
+
+    @classmethod
+    def load(cls, store: SessionStore, session_id: str) -> Session:
+        events = store.load(session_id)
+        started = next(
+            (event for event in events if event["type"] == "session_started"), {}
+        )
+        session = cls(
+            root=Path(str(started.get("root", "."))),
+            model=str(started.get("model", default_model())),
+            auto_confirm=bool(started.get("auto_confirm", False)),
+            session_id=session_id,
+            store=store,
+        )
+        for event in events:
+            if event["type"] == "message":
+                session._messages.append(_message_from_data(event))
+            elif event["type"] == "classification":
+                session.last_classification = Classification(
+                    int(event["tier"]),
+                    str(event["blast"]),
+                    bool(event["reversible"]),
+                    tuple(event.get("signals", ())),
+                    str(event.get("why", "")),
+                )
+            elif event["type"] == "verification":
+                session.last_verdict = str(event.get("verdict", ""))
+            elif event["type"] == "config":
+                if event.get("clear_transcript"):
+                    session._messages.clear()
+                    session.last_classification = None
+                    session.last_verdict = None
+                    session.interrupted = False
+                if "model" in event:
+                    session.model = str(event["model"])
+                if "auto_confirm" in event:
+                    session.auto_confirm = bool(event["auto_confirm"])
+            elif event["type"] == "run_interrupted":
+                session.interrupted = True
+            elif event["type"] == "run_finished":
+                session.interrupted = False
+        return session
 
     def as_messages(self) -> list[dict[str, str | None]]:
         """Return the transcript in the mapping shape expected by memory."""
@@ -96,10 +168,13 @@ class Session:
         self._messages.clear()
         self.last_classification = None
         self.last_verdict = None
+        self.interrupted = False
+        self.record_event("config", {"clear_transcript": True})
 
     def snapshot(self) -> dict[str, Any]:
         """What `/status` reports, as data rather than as printed text."""
         return {
+            "id": self.session_id,
             "root": str(self.root.resolve()),
             "model": self.model,
             "turns": len(self._messages),
@@ -110,4 +185,30 @@ class Session:
                 else self.last_classification.tier
             ),
             "last_verdict": self.last_verdict,
+            "interrupted": self.interrupted,
         }
+
+
+def _message_data(message: Message) -> dict[str, Any]:
+    return {
+        "role": message.role,
+        "content": message.content,
+        "tool_call_id": message.tool_call_id,
+        "is_error": message.is_error,
+        "tool_calls": [
+            {"id": call.id, "name": call.name, "arguments": call.arguments}
+            for call in message.tool_calls
+        ],
+    }
+
+
+def _message_from_data(data: dict[str, Any]) -> Message:
+    from ..providers import ToolCall
+
+    return Message(
+        role=data["role"],
+        content=data.get("content"),
+        tool_call_id=data.get("tool_call_id"),
+        is_error=bool(data.get("is_error", False)),
+        tool_calls=tuple(ToolCall(**call) for call in data.get("tool_calls", ())),
+    )

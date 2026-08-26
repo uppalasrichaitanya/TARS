@@ -162,3 +162,86 @@ def test_repl_reports_unconfigured_provider_and_returns_to_prompt(
     assert "no Anthropic credentials" in text
     assert '"model"' in text
     assert "Traceback" not in text
+
+
+def test_resume_lists_same_root_then_loads_explicit_id(tmp_path: Path) -> None:
+    from tars.loop.repl import Repl
+    from tars.loop.session_store import SessionStore
+    from tars.providers import Message
+
+    store = SessionStore(tmp_path / "sessions")
+    saved = Session(root=tmp_path, model="saved-model", session_id="saved", store=store)
+    saved.record(Message.user("continue this"))
+    out = StringIO()
+    repl = Repl(
+        Session(root=tmp_path, model="fake", store=store),
+        stdin=StringIO("/resume\n/resume saved\n/exit\n"),
+        stdout=out,
+        session_store=store,
+    )
+    assert repl.run() == 0
+    text = out.getvalue()
+    assert "saved" in text and "explicit ID" in text
+    assert "saved-model" in text and "turns=1" in text
+
+
+def test_resume_does_not_silently_replace_nonempty_session(tmp_path: Path) -> None:
+    from tars.loop.repl import Repl
+    from tars.loop.session_store import SessionStore
+    from tars.providers import Message
+
+    store = SessionStore(tmp_path / "sessions")
+    Session(root=tmp_path, session_id="saved", store=store)
+    current = Session(root=tmp_path, store=store)
+    current.record(Message.user("unsaved context"))
+    out = StringIO()
+    Repl(
+        current,
+        stdin=StringIO("/resume saved\n/exit\n"),
+        stdout=out,
+        session_store=store,
+    ).run()
+    assert "refusing to replace non-empty session" in out.getvalue()
+
+
+def test_resume_treats_a_last_verdict_as_nonempty_state(tmp_path: Path) -> None:
+    from tars.loop.repl import Repl
+    from tars.loop.session_store import SessionStore
+
+    store = SessionStore(tmp_path / "sessions")
+    Session(root=tmp_path, session_id="saved", store=store)
+    current = Session(root=tmp_path, store=store)
+    current.last_verdict = "pass"
+    out = StringIO()
+    Repl(
+        current,
+        stdin=StringIO("/resume saved\n/exit\n"),
+        stdout=out,
+        session_store=store,
+    ).run()
+    assert "refusing to replace non-empty session" in out.getvalue()
+
+
+def test_clear_allows_resume_and_status_lists_metadata(tmp_path: Path) -> None:
+    from tars.loop.repl import Repl
+    from tars.loop.session_store import SessionStore
+    from tars.providers import Message
+
+    store = SessionStore(tmp_path / "sessions")
+    saved = Session(root=tmp_path, model="saved-model", session_id="saved", store=store)
+    saved.record_event("run_started", {"task": "Fix the parser"})
+    saved.record(Message.user("hello"))
+    saved.record_event("verification", {"verdict": "pass"})
+    current = Session(root=tmp_path, store=store)
+    current.record(Message.user("discard me"))
+    out = StringIO()
+    Repl(
+        current,
+        stdin=StringIO("/clear\n/resume saved\n/status\n/exit\n"),
+        stdout=out,
+        session_store=store,
+    ).run()
+    text = out.getvalue()
+    assert "resumed saved" in text
+    assert "label=Fix the parser" in text
+    assert "updated=" in text and "verdict=pass" in text

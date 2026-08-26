@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from tars.loop.session import Session, default_model
-from tars.providers import Message
+from tars.providers import Message, ToolCall
 
 
 def test_a_session_defaults_to_the_current_directory():
@@ -84,6 +84,32 @@ def test_a_session_can_be_cleared_without_losing_its_root(tmp_path: Path):
     assert session.last_verdict is None
     assert session.root == tmp_path
     assert session.model == "agentrouter:claude-opus-5"
+
+
+def test_a_persisted_clear_does_not_restore_old_messages(tmp_path: Path) -> None:
+    from tars.loop.session_store import SessionStore
+
+    store = SessionStore(tmp_path / "sessions")
+    session = Session(root=tmp_path, session_id="saved", store=store)
+    session.record(Message.user("old context"))
+    session.clear()
+    assert Session.load(store, "saved").messages == ()
+
+
+def test_persistence_round_trips_full_provider_message_shape(tmp_path: Path) -> None:
+    from tars.loop.session_store import SessionStore
+
+    store = SessionStore(tmp_path / "sessions")
+    session = Session(root=tmp_path, session_id="saved", store=store)
+    session.record(
+        Message.assistant(
+            "inspect",
+            tool_calls=(ToolCall("call-1", "read_file", {"path": "a.py"}),),
+        ),
+        Message.tool_result("call-1", "denied", is_error=True),
+    )
+    loaded = Session.load(store, "saved")
+    assert loaded.messages == session.messages
 
 
 # ── the model default is machine-dependent, and must say so ──────────────

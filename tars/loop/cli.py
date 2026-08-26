@@ -11,6 +11,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -23,6 +24,7 @@ from ._io import provider_message
 from .engine import Engine
 from .repl import EngineRunner, Repl, _verdict, write_report
 from .session import Session
+from .session_store import SessionStore
 from .types import RunPromptSpec
 
 EXIT_OK = 0
@@ -79,7 +81,12 @@ def main(
         return int(exc.code or 0)
 
     if args.command is None:
-        return Repl(stdin=stdin, stdout=out, engine=engine).run()
+        home = Path(os.environ.get("TARS_HOME", Path.home() / ".tars"))
+        session_store = SessionStore(home / "sessions")
+        session = Session(store=session_store)
+        return Repl(
+            session, stdin=stdin, stdout=out, engine=engine, session_store=session_store
+        ).run()
     if args.command == "route":
         out.write(_verdict(classify(args.task)) + "\n")
         return EXIT_OK

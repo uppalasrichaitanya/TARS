@@ -14,6 +14,7 @@ from ..router import Classification
 from ._io import color_enabled, is_tty, paint, provider_message
 from .engine import Engine
 from .session import Session
+from .session_store import SessionStore
 from .types import RunPromptSpec, RunReport
 
 
@@ -53,8 +54,10 @@ class Repl:
         verify: Callable[..., verification.GateReport] = verification.verify,
         propose: Callable[..., memory.ReflectionReport] = memory.propose,
         store: MemoryApprover | None = None,
+        session_store: SessionStore | None = None,
     ) -> None:
         self.session = session or Session()
+        self.session_store = session_store or self.session.store
         self.stdin = stdin if stdin is not None else sys.stdin
         self.stdout = stdout if stdout is not None else sys.stdout
         self.engine = engine or Engine()
@@ -90,7 +93,10 @@ class Repl:
         try:
             if command in ("/exit", "/quit"):
                 return True
-            if command == "/help":
+            if command == "/clear":
+                self.session.clear()
+                self._write("cleared\n")
+            elif command == "/help":
                 self._help()
             elif command == "/run":
                 self._run(argument)
@@ -102,6 +108,8 @@ class Repl:
                 self._memory(argument)
             elif command == "/status":
                 self._status()
+            elif command == "/resume":
+                self._resume(argument)
             elif command == "/pillars":
                 self._pillars()
             else:
@@ -129,11 +137,22 @@ class Repl:
             return
         verdict = self.classify(task)
         self.session.last_classification = verdict
+        self.session.record_event(
+            "classification",
+            {
+                "tier": verdict.tier,
+                "blast": verdict.blast,
+                "reversible": verdict.reversible,
+                "signals": list(verdict.signals),
+                "why": verdict.why,
+            },
+        )
         self._write(f"{_verdict(verdict)}\n")
 
     def _verify(self) -> None:
         report = self.verify(root=self.session.root)
         self.session.last_verdict = report.verdict
+        self.session.record_event("verification", {"verdict": report.verdict})
         self._write(f"VERIFY: {report.summary_line()}\n")
 
     def _memory(self, argument: str) -> None:
@@ -158,6 +177,47 @@ class Repl:
 
     def _status(self) -> None:
         self._write(json.dumps(self.session.snapshot(), sort_keys=True) + "\n")
+        if self.session_store is not None:
+            for item in self.session_store.list_sessions(root=self.session.root):
+                events = item["events"]
+                started: dict[str, object] = next(
+                    (e for e in events if e["type"] == "session_started"), {}
+                )
+                self._write(
+                    f"session {item['id']} model={started.get('model', '')} "
+                    f"turns={sum(e['type'] == 'message' for e in events)} "
+                    f"updated={item['updated']:.0f} label={item['label']} "
+                    f"verdict={item['verdict']}\n"
+                )
+
+    def _resume(self, session_id: str) -> None:
+        if self.session_store is None:
+            self._write("error: session persistence is unavailable\n")
+            return
+        if not session_id:
+            self._write("resumable sessions (choose an explicit ID):\n")
+            for item in self.session_store.list_sessions(root=self.session.root):
+                self._write(f"{item['id']}\n")
+            return
+        if (
+            self.session.messages
+            or self.session.last_classification is not None
+            or self.session.last_verdict is not None
+        ):
+            self._write("refusing to replace non-empty session; use /clear first\n")
+            return
+        loaded = Session.load(self.session_store, session_id)
+        if loaded.root.resolve() != self.session.root.resolve():
+            self._write("error: session belongs to a different root\n")
+            return
+        self.session = loaded
+        self.store = self.store or MemoryStore(root=self.session.root)
+        state = self.session.snapshot()
+        self._write(
+            f"resumed {session_id} root={state['root']} model={state['model']} "
+            f"turns={state['turns']} last_tier={state['last_tier']} "
+            f"last_verdict={state['last_verdict']} interrupted={state['interrupted']}\n"
+        )
 
     def _pillars(self) -> None:
         self._write("ORIENT → CLASSIFY → PLAN → ACT → VERIFY → REFLECT → REPORT\n")
@@ -165,7 +225,7 @@ class Repl:
     def _help(self) -> None:
         self._write(
             "/run <task>  /route <task>  /verify  /memory  /memory approve <id>\n"
-            "/status  /pillars  /help  /exit\n"
+            "/status  /resume [ID]  /clear  /pillars  /help  /exit\n"
         )
 
     def _write(self, text: str) -> None:

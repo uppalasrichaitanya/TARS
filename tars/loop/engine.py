@@ -102,6 +102,24 @@ class Engine:
         output: TextIO | None = None,
     ) -> RunReport:
         """Execute one complete loop and return its structured report."""
+        session.interrupted = False
+        session.record_event("run_started", {"task": spec.task})
+        if not session.messages:
+            session.record_event("config", {"label": spec.task[:80]})
+        try:
+            return self._run(spec, session, output=output)
+        except BaseException:
+            session.interrupted = True
+            session.record_event("run_interrupted", {"task": spec.task})
+            raise
+
+    def _run(
+        self,
+        spec: RunPromptSpec,
+        session: Session,
+        *,
+        output: TextIO | None = None,
+    ) -> RunReport:
         stream = output
         uncertainties: list[str] = []
         touched: list[str] = []
@@ -166,11 +184,22 @@ class Engine:
         gate = self.verify(root=session.root)
         session.last_classification = verdict
         session.last_verdict = gate.verdict
+        session.record_event(
+            "classification",
+            {
+                "tier": verdict.tier,
+                "blast": verdict.blast,
+                "reversible": verdict.reversible,
+                "signals": list(verdict.signals),
+                "why": verdict.why,
+            },
+        )
+        session.record_event("verification", {"verdict": gate.verdict})
         uncertainties.extend(gate.notes)
         reflection = self.propose(session.as_messages(), root=str(session.root))
         uncertainties.extend(reflection.notes)
 
-        return RunReport(
+        report = RunReport(
             task=spec.task,
             verdict=verdict_text,
             verification_passed=gate.passed,
@@ -180,6 +209,8 @@ class Engine:
             uncertainties=tuple(uncertainties),
             declined=tuple(declined),
         )
+        session.record_event("run_finished", {"task": spec.task})
+        return report
 
 
 def _verdict_text(verdict: Classification) -> str:
