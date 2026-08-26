@@ -25,6 +25,7 @@ from ..act import (
 from .types import ToolCall, ToolResult
 
 Confirm = Callable[[str], bool]
+Mutation = Callable[[tuple[str, ...]], None]
 TOOL_NAMES = (
     "read_file",
     "list_dir",
@@ -47,6 +48,7 @@ class Toolbox:
         executor: Executor | None = None,
         confirm: Confirm | None = None,
         browser_factory: Callable[[], Any] | None = None,
+        on_mutation: Mutation | None = None,
     ) -> None:
         self.root = Path(root)
         self.executor = executor or LocalExecutor(self.root)
@@ -55,6 +57,7 @@ class Toolbox:
         self._browser_session: Any | None = None
         self._browser_factory = browser_factory
         self._browser_error: str | None = None
+        self.on_mutation = on_mutation or (lambda _paths: None)
 
     def _get_browser(self) -> Any:
         if self._browser_session is not None:
@@ -150,6 +153,7 @@ class Toolbox:
         result = self.executor.apply(edit)
         if not result.ok:
             return _action_error("apply_edit", result)
+        self.on_mutation((edit.path,))
         return ToolResult.ok_result("apply_edit", result.diff or result.detail)
 
     def _run_command(self, args: Mapping[str, Any]) -> ToolResult:
@@ -165,6 +169,7 @@ class Toolbox:
         )
         if not self.confirm(command.display):
             return ToolResult.error_result("run_command", "command declined")
+        before = _git_status(self.root)
         result = self.executor.run(command)
         if not result.ok:
             return _action_error("run_command", result)
@@ -200,6 +205,12 @@ class Toolbox:
                     touched = (*touched, *extra)
         except Exception:  # noqa: BLE001, S110
             pass
+        after = _git_status(self.root)
+        changed = tuple(
+            sorted(path for path, state in after.items() if before.get(path) != state)
+        )
+        if changed:
+            self.on_mutation(changed)
         return ToolResult.ok_result("run_command", output, touched=touched)
 
     def _browser_goto(self, args: Mapping[str, Any]) -> ToolResult:
@@ -292,3 +303,20 @@ def _build_edit(args: Mapping[str, Any]) -> Edit:
 def _action_error(name: str, result: Any) -> ToolResult:
     reason = result.reason or "failed"
     return ToolResult.error_result(name, f"{reason}: {result.detail}")
+
+
+def _git_status(root: Path) -> dict[str, str]:
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+    except Exception:  # noqa: BLE001
+        return {}
+    if result.returncode != 0:
+        return {}
+    return {line[3:].strip(): line[:2] for line in result.stdout.splitlines()}

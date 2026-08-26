@@ -16,6 +16,8 @@ mappings, not provider types.
 from __future__ import annotations
 
 import os
+import subprocess
+import tempfile
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -88,6 +90,8 @@ class Session:
     #: What VERIFY last concluded, as the gate's own verdict string.
     last_verdict: str | None = None
     interrupted: bool = False
+    checkpoint_sha: str | None = None
+    checkpoint_paths: set[str] = field(default_factory=set, repr=False)
     tier0_source: str = field(default="unset", init=False)
 
     def __post_init__(self) -> None:
@@ -186,6 +190,86 @@ class Session:
             {"role": message.role, "content": message.content}
             for message in self._messages
         ]
+
+    def ensure_checkpoint(self) -> str | None:
+        """Snapshot the pre-ACT worktree without changing its index or files."""
+        if self.checkpoint_sha is not None:
+            return self.checkpoint_sha
+        if not (self.root / ".git").exists():
+            return None
+        with tempfile.NamedTemporaryFile() as index:
+            env = {**os.environ, "GIT_INDEX_FILE": index.name}
+            subprocess.run(
+                ["git", "read-tree", "HEAD"],
+                cwd=self.root,
+                env=env,
+                check=True,
+                capture_output=True,
+            )
+            subprocess.run(
+                ["git", "add", "-A"],
+                cwd=self.root,
+                env=env,
+                check=True,
+                capture_output=True,
+            )
+            tree = subprocess.run(
+                ["git", "write-tree"],
+                cwd=self.root,
+                env=env,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+        parent = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=self.root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        commit = subprocess.run(
+            ["git", "commit-tree", tree, "-p", parent, "-m", "TARS pre-ACT checkpoint"],
+            cwd=self.root,
+            check=True,
+            capture_output=True,
+            text=True,
+            env={
+                **os.environ,
+                "GIT_AUTHOR_NAME": "TARS",
+                "GIT_AUTHOR_EMAIL": "tars@localhost",
+                "GIT_COMMITTER_NAME": "TARS",
+                "GIT_COMMITTER_EMAIL": "tars@localhost",
+            },
+        ).stdout.strip()
+        ref = f"refs/tars/checkpoints/{self.session_id}"
+        subprocess.run(["git", "update-ref", ref, commit], cwd=self.root, check=True)
+        self.checkpoint_sha = commit
+        return commit
+
+    def note_mutation(self, paths: tuple[str, ...]) -> None:
+        self.checkpoint_paths.update(paths)
+
+    def undo(self) -> tuple[str, ...]:
+        """Restore only paths TARS mutated, preserving unrelated user work."""
+        if self.checkpoint_sha is None:
+            return ()
+        restored: list[str] = []
+        for relative in sorted(self.checkpoint_paths):
+            target = self.root / relative
+            blob = subprocess.run(
+                ["git", "show", f"{self.checkpoint_sha}:{relative}"],
+                cwd=self.root,
+                capture_output=True,
+            )
+            if blob.returncode == 0:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(blob.stdout)
+            elif target.exists():
+                target.unlink()
+            restored.append(relative)
+        self.checkpoint_paths.clear()
+        return tuple(restored)
 
     def clear(self) -> None:
         """Drop the transcript and the verdicts, keeping the configuration.

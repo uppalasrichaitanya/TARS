@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from io import StringIO
 from pathlib import Path
+import subprocess
 
 from tars.loop.session import Session
 from tars.loop.types import RunReport
@@ -72,6 +73,92 @@ def test_repl_runs_engine_and_handles_unknown_command(tmp_path: Path) -> None:
     assert "memory: proposed=3 committed=1 queued=2" in text
     assert "declined: apply_edit: edit declined" in text
     assert "uncertainty verbatim" in text
+
+
+def _git(root: Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", *args], cwd=root, check=True, capture_output=True, text=True
+    ).stdout.strip()
+
+
+def test_undo_restores_a_clean_tree_edit_from_checkpoint(tmp_path: Path) -> None:
+    from tars.loop.repl import Repl
+    from tars.loop.tools import Toolbox
+    from tars.loop.types import ToolCall
+
+    _git(tmp_path, "init", "-q")
+    (tmp_path / "code.py").write_text("x = 1\n", encoding="utf-8")
+    _git(tmp_path, "add", "code.py")
+    _git(
+        tmp_path,
+        "-c",
+        "user.name=TARS Test",
+        "-c",
+        "user.email=tars@example.invalid",
+        "commit",
+        "-qm",
+        "base",
+    )
+    session = Session(root=tmp_path, model="fake")
+    session.ensure_checkpoint()
+    tools = Toolbox(
+        tmp_path, confirm=lambda _preview: True, on_mutation=session.note_mutation
+    )
+    assert tools.dispatch(
+        ToolCall(
+            "1",
+            "apply_edit",
+            {"path": "code.py", "hunks": [{"old": "x = 1", "new": "x = 2"}]},
+        )
+    ).ok
+
+    out = StringIO()
+    Repl(session, stdin=StringIO("/undo\n/exit\n"), stdout=out).run()
+
+    assert session.checkpoint_sha
+    assert _git(tmp_path, "cat-file", "-t", session.checkpoint_sha) == "commit"
+    assert (tmp_path / "code.py").read_text(encoding="utf-8") == "x = 1\n"
+
+
+def test_undo_preserves_unrelated_dirty_worktree_change(tmp_path: Path) -> None:
+    from tars.loop.repl import Repl
+    from tars.loop.tools import Toolbox
+    from tars.loop.types import ToolCall
+
+    _git(tmp_path, "init", "-q")
+    (tmp_path / "code.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "notes.txt").write_text("committed\n", encoding="utf-8")
+    _git(tmp_path, "add", "code.py", "notes.txt")
+    _git(
+        tmp_path,
+        "-c",
+        "user.name=TARS Test",
+        "-c",
+        "user.email=tars@example.invalid",
+        "commit",
+        "-qm",
+        "base",
+    )
+    (tmp_path / "notes.txt").write_text("user's unsaved work\n", encoding="utf-8")
+    session = Session(root=tmp_path, model="fake")
+    session.ensure_checkpoint()
+    tools = Toolbox(
+        tmp_path, confirm=lambda _preview: True, on_mutation=session.note_mutation
+    )
+    assert tools.dispatch(
+        ToolCall(
+            "1",
+            "apply_edit",
+            {"path": "code.py", "hunks": [{"old": "x = 1", "new": "x = 2"}]},
+        )
+    ).ok
+
+    Repl(session, stdin=StringIO("/undo\n/exit\n"), stdout=StringIO()).run()
+
+    assert (tmp_path / "code.py").read_text(encoding="utf-8") == "x = 1\n"
+    assert (tmp_path / "notes.txt").read_text(
+        encoding="utf-8"
+    ) == "user's unsaved work\n"
 
 
 def test_repl_handles_eof_and_ctrl_c_cleanly(tmp_path: Path) -> None:

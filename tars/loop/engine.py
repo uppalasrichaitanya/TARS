@@ -222,7 +222,10 @@ class Engine:
 
         _write(stream, "ACT\n")
         confirm = (lambda _preview: True) if spec.auto_confirm else None
-        toolbox = self.toolbox(session.root, confirm=confirm)
+        session.ensure_checkpoint()
+        toolbox = self.toolbox(
+            session.root, confirm=confirm, on_mutation=session.note_mutation
+        )
 
         def dispatch(calls: Sequence[ProviderToolCall]) -> None:
             for call in calls:

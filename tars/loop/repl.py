@@ -108,6 +108,9 @@ class Repl:
                 self._memory(argument)
             elif command == "/status":
                 self._status()
+            elif command == "/undo":
+                restored = self.session.undo()
+                self._write(f"restored {', '.join(restored) or 'nothing'}\n")
             elif command == "/resume":
                 self._resume(argument)
             elif command == "/pillars":
@@ -230,7 +233,7 @@ class Repl:
     def _help(self) -> None:
         self._write(
             "/run <task>  /route <task>  /verify  /memory  /memory approve <id>\n"
-            "/status  /resume [ID]  /clear  /pillars  /help  /exit\n"
+            "/status  /resume [ID]  /undo  /clear  /pillars  /help  /exit\n"
         )
 
     def _write(self, text: str) -> None:
