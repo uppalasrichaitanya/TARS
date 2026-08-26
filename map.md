@@ -28,7 +28,7 @@ The spec lives in `master_agent_loop.md`. Its five non-negotiable directives:
 
 | | |
 |---|---|
-| Tests | **1055 passed, 0 failed, 3 skipped** |
+| Tests | **1057 passed, 0 failed, 3 skipped** |
 | `tars-verify .` | **PASS 4/4** |
 | Transient retry | **SHIPPED + hardened** (2026-08-26): 405/429/502/503 from **any** provider (not just AgentRouter) now retry, up to 3 attempts with exponential backoff (2s, 4s, injectable sleeper); PLAN exhaustion interrupts, ACT exhaustion degrades to an honest report. Previously gated to `agentrouter` only, so OpenRouter/TokenRouter 429/503 raised immediately — fatal for free tier-0 |
 | Session persistence | **SHIPPED** (2026-08-26): append-only JSONL, `/resume [ID]`, durable `/clear`, same-root discovery in `/status`; interrupted runs never resume mid-ACT |
@@ -42,9 +42,10 @@ The spec lives in `master_agent_loop.md`. Its five non-negotiable directives:
 Known caveats, stated plainly:
 - AgentRouter's WAF intermittently 405s valid requests (AGENTS.md trap #6);
   live runs need a retry and honest interruption reports.
-- **REPORT under-reports `touched` when the model edits via `run_command`**
-  instead of `apply_edit` (seen in the graded run: repo changed,
-  `touched: none`). Unfixed; next slice.
+- **REPORT `touched` (fixed):** `run_command` edits now report both the
+  command and the actual file paths changed (via `git status --porcelain`
+  after the command). Previously a `run_command` that wrote a file showed
+  `touched: none` or just the command.
 
 ---
 
@@ -189,7 +190,7 @@ model is live so it is never a mystery.
     the zero-dependency invariant — true embeddings would need a dependency or
     external API. Accepted limitation (documented in code): pure paraphrases with no
     shared words don't match. The zero-dep guard test (`test_the_memory_writer_needs_no_third_party_package`)
-    covers it transitively. Gate PASS 4/4 (1055 passed); `tars-readme --check` exit 0.
+    covers it transitively. Gate PASS 4/4 (1057 passed); `tars-readme --check` exit 0.
  3. **GPT-5.6 path — BLOCKED on AgentRouter's client whitelist.** Probed
     2026-08-26 with the codex key: the `/v1` surface 401s the official OpenAI
     SDK on both `/chat/completions` and `/responses` (`unauthorized_client_error`),

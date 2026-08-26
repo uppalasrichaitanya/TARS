@@ -8,6 +8,7 @@ exceptions into the loop.
 
 from __future__ import annotations
 
+import subprocess
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
@@ -170,7 +171,36 @@ class Toolbox:
         output = result.stdout
         if result.stderr:
             output += ("\n" if output else "") + result.stderr
-        return ToolResult.ok_result("run_command", output, touched=(command.display,))
+        touched: tuple[str, ...] = (command.display,)
+        # Enrich with actual file paths changed in the repo (so edits via
+        # run_command, e.g. printf > file, are reported as file touches).
+        try:
+            proc = subprocess.run(
+                ["git", "status", "--porcelain"],
+                cwd=self.root,
+                capture_output=True,
+                text=True,
+                timeout=2,
+                check=False,
+            )
+            if proc.returncode == 0:
+                files: list[str] = []
+                for line in proc.stdout.splitlines():
+                    # porcelains: " M path", "?? path", "A  path"
+                    path = line[3:].strip().split(" -> ")[-1].strip()
+                    if path:
+                        # strip quotes if git quotes the path
+                        if path.startswith('"') and path.endswith('"'):
+                            path = path[1:-1]
+                        files.append(path)
+                if files:
+                    # Keep command display first, then file paths not already present
+                    seen = set(touched)
+                    extra = tuple(p for p in files if p not in seen)
+                    touched = (*touched, *extra)
+        except Exception:  # noqa: BLE001, S110
+            pass
+        return ToolResult.ok_result("run_command", output, touched=touched)
 
     def _browser_goto(self, args: Mapping[str, Any]) -> ToolResult:
         url = _required_str(args, "url")
