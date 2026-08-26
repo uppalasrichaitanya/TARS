@@ -35,6 +35,11 @@ TOOL_NAMES = (
     "browser_snapshot",
     "browser_click",
     "browser_type",
+    "browser_check",
+    "browser_uncheck",
+    "browser_back",
+    "browser_forward",
+    "browser_reload",
 )
 
 
@@ -57,6 +62,7 @@ class Toolbox:
         self._browser_session: Any | None = None
         self._browser_factory = browser_factory
         self._browser_error: str | None = None
+        self._last_browser_snapshot: str | None = None
         self.on_mutation = on_mutation or (lambda _paths: None)
 
     def _get_browser(self) -> Any:
@@ -97,6 +103,11 @@ class Toolbox:
             "browser_snapshot": self._browser_snapshot,
             "browser_click": self._browser_click,
             "browser_type": self._browser_type,
+            "browser_check": self._browser_check,
+            "browser_uncheck": self._browser_uncheck,
+            "browser_back": self._browser_back,
+            "browser_forward": self._browser_forward,
+            "browser_reload": self._browser_reload,
         }
         handler = handlers.get(call.name)
         if handler is None:
@@ -223,14 +234,23 @@ class Toolbox:
             return ToolResult.error_result("browser_goto", str(exc))
         return ToolResult.ok_result("browser_goto", f"navigated to {url}")
 
-    def _browser_snapshot(self, _args: Mapping[str, Any]) -> ToolResult:
+    def _browser_snapshot(self, args: Mapping[str, Any]) -> ToolResult:
+        incremental = args.get("incremental", False)
+        if not isinstance(incremental, bool):
+            raise TypeError("incremental must be a boolean")
         try:
             snapshot = self._get_browser().snapshot()
         except RuntimeError as exc:
             return ToolResult.error_result("browser_snapshot", str(exc))
         except Exception as exc:  # noqa: BLE001
             return ToolResult.error_result("browser_snapshot", str(exc))
-        return ToolResult.ok_result("browser_snapshot", snapshot)
+        output = snapshot
+        if incremental and self._last_browser_snapshot is not None:
+            before = set(self._last_browser_snapshot.splitlines())
+            changed = [line for line in snapshot.splitlines() if line not in before]
+            output = "\n".join(changed) or "no accessibility changes"
+        self._last_browser_snapshot = snapshot
+        return ToolResult.ok_result("browser_snapshot", output)
 
     def _browser_click(self, args: Mapping[str, Any]) -> ToolResult:
         ref = args.get("ref")
@@ -258,6 +278,44 @@ class Toolbox:
         except Exception as exc:  # noqa: BLE001
             return ToolResult.error_result("browser_type", str(exc))
         return ToolResult.ok_result("browser_type", f"typed into ref {ref}")
+
+    def _browser_check(self, args: Mapping[str, Any]) -> ToolResult:
+        return self._browser_ref_action("browser_check", "check", args)
+
+    def _browser_uncheck(self, args: Mapping[str, Any]) -> ToolResult:
+        return self._browser_ref_action("browser_uncheck", "uncheck", args)
+
+    def _browser_ref_action(
+        self, name: str, method: str, args: Mapping[str, Any]
+    ) -> ToolResult:
+        ref = args.get("ref")
+        if not isinstance(ref, int):
+            raise TypeError("ref must be an integer")
+        try:
+            getattr(self._get_browser(), method)(ref)
+        except (RuntimeError, KeyError) as exc:
+            return ToolResult.error_result(name, str(exc))
+        except Exception as exc:  # noqa: BLE001
+            return ToolResult.error_result(name, str(exc))
+        return ToolResult.ok_result(name, f"{method}ed ref {ref}")
+
+    def _browser_back(self, _args: Mapping[str, Any]) -> ToolResult:
+        return self._browser_navigation("browser_back", "back")
+
+    def _browser_forward(self, _args: Mapping[str, Any]) -> ToolResult:
+        return self._browser_navigation("browser_forward", "forward")
+
+    def _browser_reload(self, _args: Mapping[str, Any]) -> ToolResult:
+        return self._browser_navigation("browser_reload", "reload")
+
+    def _browser_navigation(self, name: str, method: str) -> ToolResult:
+        try:
+            getattr(self._get_browser(), method)()
+        except RuntimeError as exc:
+            return ToolResult.error_result(name, str(exc))
+        except Exception as exc:  # noqa: BLE001
+            return ToolResult.error_result(name, str(exc))
+        return ToolResult.ok_result(name, method)
 
     def close(self) -> None:
         if self._browser_session is not None:

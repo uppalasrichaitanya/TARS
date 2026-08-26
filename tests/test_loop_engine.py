@@ -212,6 +212,56 @@ def test_project_context_cannot_override_real_verification(tmp_path: Path) -> No
     assert report.verification_passed is False
 
 
+def test_harness_system_prompt_is_injected_on_every_generate(tmp_path: Path) -> None:
+    from tars.loop.engine import Engine
+
+    calls: list[tuple[Message, ...]] = []
+
+    def provider(messages, _tools, _model):
+        calls.append(tuple(messages))
+        return _response("done")
+
+    Engine(provider=provider).run(
+        RunPromptSpec("task"), Session(root=tmp_path, model="fake"), output=StringIO()
+    )
+
+    assert len(calls) == 2
+    for messages in calls:
+        harness = messages[0]
+        assert harness.role == "system"
+        assert "MEMORY BEFORE OPINION" in (harness.content or "")
+        assert "ORIENT -> CLASSIFY -> PLAN -> ACT -> VERIFY -> REFLECT -> REPORT" in (
+            harness.content or ""
+        )
+
+
+def test_streaming_chunks_arrive_after_classify_and_incrementally(
+    tmp_path: Path,
+) -> None:
+    from tars.loop.engine import Engine
+
+    output = StringIO()
+    observations: list[str] = []
+
+    class StreamingProvider:
+        def __call__(self, *_args):
+            raise AssertionError("stream should be preferred")
+
+        def stream(self, messages, tools, model, *, on_text):
+            for chunk in ("first ", "second"):
+                on_text(chunk)
+                observations.append(output.getvalue())
+            return _response("first second")
+
+    Engine(provider=StreamingProvider()).run(
+        RunPromptSpec("task"), Session(root=tmp_path, model="fake"), output=output
+    )
+
+    assert "CLASSIFY:" in observations[0]
+    assert observations[0].index("CLASSIFY:") < observations[0].index("first ")
+    assert "second" not in observations[0]
+
+
 def test_engine_round_trips_a_tool_call_until_model_finishes(tmp_path: Path) -> None:
     from tars.loop.engine import Engine
 

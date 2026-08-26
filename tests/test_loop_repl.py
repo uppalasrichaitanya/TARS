@@ -75,6 +75,25 @@ def test_repl_runs_engine_and_handles_unknown_command(tmp_path: Path) -> None:
     assert "uncertainty verbatim" in text
 
 
+def test_bare_prompt_runs_the_full_workflow(tmp_path: Path) -> None:
+    from tars.loop.repl import Repl
+
+    seen: list[str] = []
+
+    class FakeEngine:
+        def run(self, spec, session, *, output):
+            seen.append(spec.task)
+            return RunReport(task=spec.task, verification_passed=True)
+
+    Repl(
+        Session(root=tmp_path),
+        stdin=StringIO("Fix bug in foo.py\n/exit\n"),
+        stdout=StringIO(),
+        engine=FakeEngine(),
+    ).run()
+    assert seen == ["Fix bug in foo.py"]
+
+
 def _git(root: Path, *args: str) -> str:
     return subprocess.run(
         ["git", *args], cwd=root, check=True, capture_output=True, text=True

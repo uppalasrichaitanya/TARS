@@ -27,6 +27,21 @@ class FakeBrowser:
     def type(self, ref: int, text: str) -> None:
         self.typed.append((ref, text))
 
+    def check(self, ref: int) -> None:
+        self.clicked.append(ref)
+
+    def uncheck(self, ref: int) -> None:
+        self.clicked.append(-ref)
+
+    def back(self) -> None:
+        self.goto_url = "back"
+
+    def forward(self) -> None:
+        self.goto_url = "forward"
+
+    def reload(self) -> None:
+        self.goto_url = "reload"
+
     def close(self) -> None:
         pass
 
@@ -54,6 +69,29 @@ def test_browser_tools_drive_fake_session(tmp_path: Path) -> None:
     )
     assert result.ok
     assert browser.typed == [(1, "hello")]
+
+    assert toolbox.dispatch(ToolCall("5", "browser_check", {"ref": 2})).ok
+    assert toolbox.dispatch(ToolCall("6", "browser_uncheck", {"ref": 3})).ok
+    assert toolbox.dispatch(ToolCall("7", "browser_back", {})).ok
+    assert toolbox.dispatch(ToolCall("8", "browser_forward", {})).ok
+    assert toolbox.dispatch(ToolCall("9", "browser_reload", {})).ok
+    assert browser.clicked[-2:] == [2, -3]
+    assert browser.goto_url == "reload"
+
+
+def test_browser_snapshot_can_return_only_changes(tmp_path: Path) -> None:
+    browser = FakeBrowser()
+    toolbox = Toolbox(root=tmp_path, browser_factory=lambda: browser)
+    assert toolbox.dispatch(ToolCall("1", "browser_snapshot", {})).output
+    assert (
+        toolbox.dispatch(
+            ToolCall("2", "browser_snapshot", {"incremental": True})
+        ).output
+        == "no accessibility changes"
+    )
+    browser.snapshot_text += '\n[ref=2] status "Saved"'
+    changed = toolbox.dispatch(ToolCall("3", "browser_snapshot", {"incremental": True}))
+    assert 'status "Saved"' in changed.output
 
 
 def test_browser_tools_report_missing_extra(tmp_path: Path) -> None:

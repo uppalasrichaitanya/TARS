@@ -86,7 +86,7 @@ class Repl:
         if not line:
             return False
         if not line.startswith("/"):
-            self._write("commands start with /; try /help\n")
+            self._run(line)
             return False
         command, _, argument = line.partition(" ")
         argument = argument.strip()
