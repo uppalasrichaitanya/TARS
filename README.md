@@ -1,4 +1,4 @@
-# tars
+# tars-agent
 
 TARS — a disciplined, multi-session coding agent loop
 
@@ -24,9 +24,10 @@ Run TARS's disciplined agent loop.
 
 ```console
 tars
+python -m tars.loop
 ```
 
-Flags: `--yes`, `--root`, `--model`, `--web-url`, `--web-steps`, `--web-expect`
+Flags: `--version`, `--yes`, `--root`, `--model`, `--web-url`, `--web-steps`, `--web-expect`
 
 <sub>declared in `pyproject.toml`</sub>
 
@@ -79,6 +80,16 @@ python -m tars.verification
 Flags: `--only`, `--include`, `--list`, `--json`, `--fail-fast`, `--timeout`, `--output-lines`, `--max-output-chars`, `--allow-no-checks`, `--quiet/-q`, `--no-color`
 
 <sub>declared in `pyproject.toml`</sub>
+
+### `python -m tars`
+
+Efficient accessibility-tree-first web testing.
+
+```console
+python -m tars
+```
+
+<sub>declared in `tars/__main__.py`</sub>
 
 ## Examples
 
@@ -142,7 +153,7 @@ reflect_on("run/session.jsonl").nothing_worth_remembering
 
 ## How it's structured
 
-- `tars/__init__.py` — TARS — a disciplined, multi-session coding agent loop.
+- `tars/__init__.py` — TARS — a disciplined, multi-session coding agent loop. (`python -m tars`)
   - `tars/_cli_helpers.py` — Shared CLI helpers: color and tty detection.
   - `tars/act/__init__.py` — TARS ACT — PHASE 4, isolated: the phase that actually touches the repo.
     - `tars/act/base.py` — The one interface every executor implements.
@@ -151,7 +162,7 @@ reflect_on("run/session.jsonl").nothing_worth_remembering
     - `tars/act/types.py` — What ACT was asked to do, and what came of it.
   - `tars/browser/__init__.py` — Efficient, accessibility-tree-first browser testing. (`python -m tars.browser`)
     - `tars/browser/cli.py` — `tars-browser`: scriptable accessibility-tree web tests.
-  - `tars/loop/__init__.py` — TARS loop orchestrator — the seven phases, driven.
+  - `tars/loop/__init__.py` — TARS loop orchestrator — the seven phases, driven. (`python -m tars.loop`)
     - `tars/loop/_io.py` — Small output helpers for the REPL.
     - `tars/loop/cli.py` — `tars` — persistent REPL and one-shot loop commands.
     - `tars/loop/engine.py` — The seven-phase loop, composed from TARS's tested phase modules.
