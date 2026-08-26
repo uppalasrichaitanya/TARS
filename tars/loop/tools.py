@@ -340,7 +340,7 @@ def _required_str(args: Mapping[str, Any], name: str) -> str:
 def _build_edit(args: Mapping[str, Any]) -> Edit:
     path = _required_str(args, "path")
     kind = args.get("kind", "replace")
-    if kind == "replace":
+    if kind in ("replace", "anchored"):
         raw_hunks = args.get("hunks")
         if not isinstance(raw_hunks, list):
             raise TypeError("hunks must be a list")

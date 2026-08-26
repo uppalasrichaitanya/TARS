@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+import builtins
 from collections.abc import Callable
 from difflib import get_close_matches
 from pathlib import Path
@@ -75,9 +76,15 @@ class Repl:
     def run(self) -> int:
         while True:
             try:
-                if self._prompt:
-                    self._write("tars> ")
-                line = self.stdin.readline()
+                if self._uses_readline_input():
+                    line = builtins.input(paint("tars> ", "32", enabled=self._color))
+                    line += "\n"
+                else:
+                    if self._prompt:
+                        self._write("tars> ")
+                    line = self.stdin.readline()
+            except EOFError:
+                return 0
             except KeyboardInterrupt:
                 self._write("cancelled\n")
                 continue
@@ -85,6 +92,15 @@ class Repl:
                 return 0
             if self._dispatch(line.strip()):
                 return 0
+
+    def _uses_readline_input(self) -> bool:
+        """Only the real terminal uses input(); injected streams stay hermetic."""
+        return (
+            self._prompt
+            and self.stdin is sys.stdin
+            and self.stdout is sys.stdout
+            and is_tty(self.stdin)
+        )
 
     def _dispatch(self, line: str) -> bool:
         if not line:
@@ -270,6 +286,7 @@ def _install_completion(root: Path) -> None:
         return matches[state] if state < len(matches) else None
 
     readline.set_completer(complete)
+    readline.set_completer_delims(" \t\n")
     readline.parse_and_bind("tab: complete")
 
 

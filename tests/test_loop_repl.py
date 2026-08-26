@@ -102,6 +102,28 @@ def test_completion_offers_slash_commands_and_paths(tmp_path: Path) -> None:
     assert "source.py" in completion_candidates("sou", tmp_path)
 
 
+def test_interactive_repl_uses_input_so_readline_completion_can_run(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import builtins
+    import sys
+
+    from tars.loop.repl import Repl
+
+    prompts: list[str] = []
+
+    def fake_input(prompt: str) -> str:
+        prompts.append(prompt)
+        return "/exit"
+
+    monkeypatch.setattr(builtins, "input", fake_input)
+    monkeypatch.setattr("tars.loop.repl.is_tty", lambda _stream: True)
+    repl = Repl(Session(root=tmp_path), stdin=sys.stdin, stdout=sys.stdout)
+
+    assert repl.run() == 0
+    assert prompts and "tars>" in prompts[0]
+
+
 def _git(root: Path, *args: str) -> str:
     return subprocess.run(
         ["git", *args], cwd=root, check=True, capture_output=True, text=True

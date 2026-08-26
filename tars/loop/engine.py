@@ -69,7 +69,16 @@ TOOL_DEFS = (
             "type": "object",
             "properties": {
                 "path": {"type": "string"},
-                "kind": {"type": "string"},
+                "kind": {
+                    "type": "string",
+                    "enum": [
+                        "replace",
+                        "anchored",
+                        "create",
+                        "overwrite",
+                        "delete",
+                    ],
+                },
                 "hunks": {"type": "array"},
                 "content": {"type": "string"},
             },

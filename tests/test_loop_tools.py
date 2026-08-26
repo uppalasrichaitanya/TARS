@@ -61,6 +61,29 @@ def test_apply_edit_previews_confirms_and_applies(tmp_path: Path) -> None:
     assert path.read_text(encoding="utf-8") == "x = 2\n"
 
 
+def test_anchored_kind_is_a_safe_alias_for_anchored_replace(tmp_path: Path) -> None:
+    path = tmp_path / "code.py"
+    path.write_text("x = 1\n", encoding="utf-8")
+    previews: list[str] = []
+    result = Toolbox(
+        tmp_path, confirm=lambda preview: previews.append(preview) or True
+    ).dispatch(
+        ToolCall(
+            "1",
+            "apply_edit",
+            {
+                "path": "code.py",
+                "kind": "anchored",
+                "hunks": [{"old": "x = 1", "new": "x = 2"}],
+            },
+        )
+    )
+
+    assert result.ok
+    assert previews and "-x = 1" in previews[0]
+    assert path.read_text(encoding="utf-8") == "x = 2\n"
+
+
 def test_apply_edit_reports_decline_without_writing(tmp_path: Path) -> None:
     path = tmp_path / "code.py"
     path.write_text("x = 1\n", encoding="utf-8")
