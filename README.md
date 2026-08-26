@@ -155,7 +155,7 @@ reflect_on("run/session.jsonl").nothing_worth_remembering
     - `tars/memory/transcript.py` — Turning whatever the loop kept into turns the writer can quote.
     - `tars/memory/types.py` — Types the memory writer speaks: what a candidate is, and what makes one
   - `tars/providers/__init__.py` — TARS provider adapter layer.
-- …and 26 more modules
+- …and 27 more modules
 
 Tests live in `tests/`.
 

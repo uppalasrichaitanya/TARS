@@ -28,13 +28,14 @@ The spec lives in `master_agent_loop.md`. Its five non-negotiable directives:
 
 | | |
 |---|---|
-| Tests | **1015 passed, 0 failed, 2 skipped** |
+| Tests | **1024 passed, 0 failed, 2 skipped** |
 | `tars-verify .` | **PASS 4/4** |
 | Transient retry | **SHIPPED** (2026-08-26): AgentRouter 405/429/502/503 auto-retry once (2s, injectable sleeper); PLAN exhaustion interrupts, ACT exhaustion degrades to an honest report |
 | Session persistence | **SHIPPED** (2026-08-26): append-only JSONL, `/resume [ID]`, durable `/clear`, same-root discovery in `/status`; interrupted runs never resume mid-ACT |
 | Directive 3 | **ENACTED** (2026-08-26): tier 0 routes to a configurable cheap model (`TARS_TIER0_MODEL`, unset by default → honest flagship fallback); verdict line names the model each phase used |
 | Live `/run` | **VERIFIED end-to-end through AgentRouter** (2026-08-26): classify → edit → report on a temp repo; `add(2,3) = 5` after the fix |
 | Live graded run | **VERIFIED** (2026-08-26): a repo with a real failing pytest went FAIL → PASS across one live `/run`; VERIFY graded an actual fix |
+| TokenRouter provider | **SHIPPED** (2026-08-26): OpenAI-compatible free surface (`api.tokenrouter.com/v1`); `tokenrouter:`/`tokenrouter/` prefixes, slashed model ids preserved; `OPENAI_API_KEY` deliberately never consulted (reads `TOKENROUTER_API_KEY` only). Live-verified `qwen/qwen3.8-max-free` plain call + tool round-trip. Tier-0 now defaults here because `stealth/ox-alpha`'s free endpoint was empty at check time |
 | Runtime dependencies | **zero** (`dependencies = []`), enforced by tests |
 
 Known caveats, stated plainly:
@@ -50,7 +51,7 @@ Known caveats, stated plainly:
 
 | Module | Phase | What it does | How it was proven |
 |---|---|---|---|
-| `tars/providers` | — | one `generate(messages, tools, model)`; Anthropic + OpenAI direct SDKs, OpenRouter over stdlib HTTP, **AgentRouter** | live on `claude-opus-5`, including a full tool round-trip |
+| `tars/providers` | — | one `generate(messages, tools, model)`; Anthropic + OpenAI direct SDKs, OpenRouter over stdlib HTTP, **AgentRouter**, **TokenRouter** | live on `claude-opus-5` (tool round-trip) and `tokenrouter:qwen/qwen3.8-max-free` (tool round-trip); OpenAI + OpenRouter unit-tested only |
 | `tars/verification` | VERIFY | detects a repo's check surface (test/lint/typecheck/format) and runs it uniformly | runs on TARS itself as `tars-verify` |
 | `tars/readme` | — | generates a README from real code, with `--check` for CI | this repo's README is its own output, committed verbatim |
 | `tars/memory` | REFLECT | scored, domain-tagged candidates; human review queue; supersede-marks, never deletes | 76-statement hand-labelled corpus, every floor met |

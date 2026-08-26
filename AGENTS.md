@@ -86,17 +86,26 @@ error text.
 
 ### 3. Credentials on this machine
 
-Set: `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_BASE_URL=https://agentrouter.org`.
-**Unset:** `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`.
+Set (in `~/TARS/.env`, gitignored): `ANTHROPIC_AUTH_TOKEN` +
+`ANTHROPIC_BASE_URL=https://agentrouter.org`, `OPENROUTER_API_KEY`,
+`TOKENROUTER_API_KEY`, and `TARS_TIER0_MODEL=tokenrouter:qwen/qwen3.8-max-free`.
+**Unset:** `ANTHROPIC_API_KEY` (do not set it — see below), `OPENAI_API_KEY`.
 
 Consequences: a bare `claude-opus-5` routes to api.anthropic.com and **fails
-here** — use `agentrouter:claude-opus-5` for anything live. Only the Anthropic
-path can be live-verified; do not describe the OpenAI or OpenRouter adapters as
-live-verified, because they are unit-tested only.
+here** — use `agentrouter:claude-opus-5` for anything live. The Anthropic
+(AgentRouter) path and the TokenRouter path were both live-verified this
+session (TokenRouter's `qwen/qwen3.8-max-free` completed a real `tool_use`
+round-trip). The OpenAI and OpenRouter adapters are unit-tested only — do not
+describe them as live-verified.
 
 `ANTHROPIC_API_KEY` must never be used as an AgentRouter credential — that would
 send a real Anthropic key to a third party. The adapter deliberately does not
-consult it.
+consult it. By the same rule, `OPENAI_API_KEY` is never consulted by the
+TokenRouter adapter (`tars/providers/tokenrouter_provider.py`): it reads
+`TOKENROUTER_API_KEY` only, so an OpenAI key cannot leak to a third-party host.
+TokenRouter's OpenAI-compatible base URL **requires** the `/v1` suffix — the
+opposite of AgentRouter's Anthropic host, where a `/v1` base URL would
+double-version the path.
 
 **Your own Codex credentials** (a second AgentRouter key, `gpt-5.6-sol`, the `/v1`
 surface) are in `~/.codex/config.toml`. That file holds a live bearer token in
@@ -187,7 +196,9 @@ directive 1 asks exactly that. Do not just quietly do the other thing.
 
 ```
 tars/providers/     one generate(); Anthropic + OpenAI SDKs, OpenRouter (stdlib
-                    HTTP), AgentRouter. Live-verified incl. tool round-trip.
+                    HTTP), AgentRouter, TokenRouter. Anthropic (AgentRouter) and
+                    TokenRouter paths live-verified incl. tool round-trip;
+                    OpenAI + OpenRouter adapters unit-tested only.
 tars/verification/  VERIFY — detect a repo's check surface, run it uniformly.
 tars/readme/        generate a README from real code; --check for CI.
 tars/memory/        REFLECT — scored domain-tagged candidates, review queue,
