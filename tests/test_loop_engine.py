@@ -459,9 +459,7 @@ def test_agentrouter_transient_provider_error_retries_once_and_records_uncertain
 
     assert calls == 3  # PLAN retry succeeds, then one ACT turn
     assert sleeps == [2.0]
-    assert report.uncertainties == (
-        "provider returned 405; retried once and succeeded",
-    )
+    assert report.uncertainties == ("provider returned 405; retried and succeeded",)
 
 
 def test_double_agentrouter_transient_error_is_reported_and_raised(
@@ -481,7 +479,7 @@ def test_double_agentrouter_transient_error_is_reported_and_raised(
         Engine(provider=provider, sleep=lambda _seconds: None).run(
             RunPromptSpec("task"), Session(root=tmp_path, model="agentrouter:fake")
         )
-    assert calls == 2
+    assert calls == 3
 
 
 def test_double_405_act_turn_reaches_report_with_uncertainty(tmp_path: Path) -> None:
@@ -497,21 +495,29 @@ def test_double_405_act_turn_reaches_report_with_uncertainty(tmp_path: Path) -> 
             return _response("plan")
         raise ProviderAPIError("HTTP 405", provider="agentrouter", status_code=405)
 
+    sleeps: list[float] = []
     report = Engine(
         provider=provider,
-        sleep=lambda _seconds: None,
+        sleep=sleeps.append,
         verify=lambda **_kwargs: GateReport(root=str(tmp_path), results=()),
     ).run(
         RunPromptSpec("task", max_turns=2),
         Session(root=tmp_path, model="agentrouter:fake"),
     )
-    assert calls == 3
+    assert calls == 4
+    assert sleeps == [2.0, 4.0]
     assert report.uncertainties == (
-        "provider returned 405; retried once and failed again",
+        "provider returned 405; retried 3 times, all transient",
     )
 
 
-def test_non_agentrouter_provider_errors_are_not_retried(tmp_path: Path) -> None:
+def test_transient_errors_are_retried_regardless_of_provider(tmp_path: Path) -> None:
+    """A 503 from any host (here OpenRouter) is transient, so it is retried.
+
+    The original retry only fired for AgentRouter; free-tier hosts like
+    OpenRouter and TokenRouter also return 429/503 and must get the same
+    bounded backoff, or tier-0 routing dies the moment a free model throttles.
+    """
     from tars.loop.engine import Engine
     from tars.providers.errors import ProviderAPIError
 
@@ -526,7 +532,7 @@ def test_non_agentrouter_provider_errors_are_not_retried(tmp_path: Path) -> None
         Engine(provider=provider, sleep=lambda _seconds: None).run(
             RunPromptSpec("task"), Session(root=tmp_path, model="openrouter:fake")
         )
-    assert calls == 1
+    assert calls == 3
 
 
 def test_tier_zero_fallback_happens_before_flagship_transient_retry(

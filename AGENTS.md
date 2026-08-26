@@ -88,15 +88,19 @@ error text.
 
 Set (in `~/TARS/.env`, gitignored): `ANTHROPIC_AUTH_TOKEN` +
 `ANTHROPIC_BASE_URL=https://agentrouter.org`, `OPENROUTER_API_KEY`,
-`TOKENROUTER_API_KEY`, and `TARS_TIER0_MODEL=tokenrouter:qwen/qwen3.8-max-free`.
+`TOKENROUTER_API_KEY`, and `TARS_TIER0_MODEL=openrouter:minimax/minimax-m3:free`.
 **Unset:** `ANTHROPIC_API_KEY` (do not set it — see below), `OPENAI_API_KEY`.
 
 Consequences: a bare `claude-opus-5` routes to api.anthropic.com and **fails
 here** — use `agentrouter:claude-opus-5` for anything live. The Anthropic
-(AgentRouter) path and the TokenRouter path were both live-verified this
-session (TokenRouter's `qwen/qwen3.8-max-free` completed a real `tool_use`
-round-trip). The OpenAI and OpenRouter adapters are unit-tested only — do not
-describe them as live-verified.
+(AgentRouter) path was live-verified this session. The OpenRouter and
+TokenRouter adapters are now live-verified too, but with caveats documented in
+map.md §6: `stealth/ox-alpha` was **retired** (OpenRouter 404s it), and
+TokenRouter's free `qwen/qwen3.8-max-free` is **cache-only** — it serves plain
+calls but 503s on tool-bearing ones, so it cannot drive PLAN/ACT. The working
+free tier-0 driver right now is OpenRouter's `minimax/minimax-m3:free` (clean
+tool round-trip, and it drives PLAN+ACT in the loop). Free models vary in
+fidelity to TARS's argv-only `run_command` contract — see map.md.
 
 `ANTHROPIC_API_KEY` must never be used as an AgentRouter credential — that would
 send a real Anthropic key to a third party. The adapter deliberately does not

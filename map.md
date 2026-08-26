@@ -30,12 +30,12 @@ The spec lives in `master_agent_loop.md`. Its five non-negotiable directives:
 |---|---|
 | Tests | **1027 passed, 0 failed, 2 skipped** |
 | `tars-verify .` | **PASS 4/4** |
-| Transient retry | **SHIPPED** (2026-08-26): AgentRouter 405/429/502/503 auto-retry once (2s, injectable sleeper); PLAN exhaustion interrupts, ACT exhaustion degrades to an honest report |
+| Transient retry | **SHIPPED + hardened** (2026-08-26): 405/429/502/503 from **any** provider (not just AgentRouter) now retry, up to 3 attempts with exponential backoff (2s, 4s, injectable sleeper); PLAN exhaustion interrupts, ACT exhaustion degrades to an honest report. Previously gated to `agentrouter` only, so OpenRouter/TokenRouter 429/503 raised immediately — fatal for free tier-0 |
 | Session persistence | **SHIPPED** (2026-08-26): append-only JSONL, `/resume [ID]`, durable `/clear`, same-root discovery in `/status`; interrupted runs never resume mid-ACT |
 | Directive 3 | **ENACTED** (2026-08-26): tier 0 routes to a configurable cheap model (`TARS_TIER0_MODEL`, unset by default → honest flagship fallback); verdict line names the model each phase used |
 | Live `/run` | **VERIFIED end-to-end through AgentRouter** (2026-08-26): classify → edit → report on a temp repo; `add(2,3) = 5` after the fix |
 | Live graded run | **VERIFIED** (2026-08-26): a repo with a real failing pytest went FAIL → PASS across one live `/run`; VERIFY graded an actual fix |
-| TokenRouter provider | **SHIPPED** (2026-08-26): OpenAI-compatible free surface (`api.tokenrouter.com/v1`); `tokenrouter:`/`tokenrouter/` prefixes, slashed model ids preserved; `OPENAI_API_KEY` deliberately never consulted (reads `TOKENROUTER_API_KEY` only). Live-verified `qwen/qwen3.8-max-free` plain call + tool round-trip. Tier-0 now defaults here because `stealth/ox-alpha`'s free endpoint was empty at check time |
+| TokenRouter provider | **SHIPPED** (2026-08-26): OpenAI-compatible free surface (`api.tokenrouter.com/v1`); `tokenrouter:`/`tokenrouter/` prefixes, slashed model ids preserved; `OPENAI_API_KEY` deliberately never consulted (reads `TOKENROUTER_API_KEY` only). Live-verified `qwen/qwen3.8-max-free`: plain call works, but tool-bearing calls 503 (`cache-only admission` — cold requests rejected), so it **cannot** drive PLAN/ACT. Tier-0 default moved to OpenRouter `minimax/minimax-m3:free` |
 | Tier-0 creation routing | **FIXED** (2026-08-26): CLASSIFY defaulted every unspecified task to tier 1, so a fully-specified green-field "create package/function/test" task was sent to the flagship instead of the `TARS_TIER0_MODEL`. Added `cue:create-artifact` + `cue:scaffold` (tier 0) and 4 labeled dataset cases; router accuracy still 1.00 dev / 1.00 holdout |
 | Runtime dependencies | **zero** (`dependencies = []`), enforced by tests |
 
@@ -196,18 +196,33 @@ model is live so it is never a mystery.
     each phase used. Tier 0 here means "cheapest capable model" — a
     documented adaptation of the spec's "execute directly", since ACT always
     needs a driver for tool calls.
- 6. ~~**Transient provider errors are not auto-retried**~~ — DONE 2026-08-26:
-    AgentRouter 405/429/502/503 retry once automatically (fixed 2s, injected
-    sleeper); PLAN exhaustion interrupts the run, ACT exhaustion continues to
-    an honest report. Never retries 401 or other providers.
+  6. ~~**Transient provider errors are not auto-retried**~~ — DONE 2026-08-26,
+     then hardened: 405/429/502/503 from **any** provider (not just
+     AgentRouter) retry, up to 3 attempts with exponential backoff (2s, 4s,
+     injectable sleeper). Originally gated to `agentrouter`, which let
+     OpenRouter/TokenRouter throttling raise immediately — fatal once tier 0
+     started using those free hosts. PLAN exhaustion interrupts, ACT exhaustion
+     degrades to an honest report. Never retries 401.
  7. **Semantic recall for memory** — the vector side of ORIENT; only the
     structured side exists, so ORIENT cannot yet ask "what do we know
     *related* to this?" Needs a design decision first (embedding source vs
     the zero-dependency constraint). Session persistence now provides the
     corpus.
- 8. **browser-test-efficient** — a11y-tree-first web testing via playwright;
-    the spec's "sharpest technical differentiator". The loop is now solid,
-    so this is next after semantic recall's design conversation.
+  8. **browser-test-efficient** — a11y-tree-first web testing via playwright;
+     the spec's "sharpest technical differentiator". The loop is now solid,
+     so this is next after semantic recall's design conversation.
+  9. **Tier-0 free-model reality (verified by a live `/run`).** A mechanical
+     task now classifies tier 0 and PLAN+ACT correctly route to the free
+     `minimax/minimax-m3:free` (the 429 retry recovered mid-run). But free
+     models vary in fidelity to TARS's **argv-only** `run_command` contract:
+     minimax wrote the files via `write_file` but phrased `run_command` as a
+     shell *string* (`mkdir -p …`), which the executor correctly rejected, so
+     the run graded `fail` honestly. Cohere's `north-mini-code:free` 400s
+     (tool-schema incompatibility). So tier 0 works as a *routing + cost*
+     mechanism; task completion on free models depends on the model following
+     the argv contract. Ox Alpha is retired (404); TokenRouter's free Qwen is
+     cache-only (503 on tool calls). `minimax/minimax-m3:free` is the working
+     default.
 
 ---
 

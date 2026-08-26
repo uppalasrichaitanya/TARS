@@ -264,26 +264,37 @@ class Engine:
         *,
         tolerate_exhausted: bool,
     ) -> tuple[LLMResponse, str] | None:
-        try:
-            return self.provider(messages, TOOL_DEFS, model), model
-        except ProviderAPIError as exc:
-            if not _is_agentrouter_transient(exc):
-                raise
-            status = exc.status_code
-            self.sleep(2.0)
+        last_exc: ProviderAPIError | None = None
+        for attempt in range(MAX_TRANSIENT_ATTEMPTS):
             try:
                 result = self.provider(messages, TOOL_DEFS, model)
-            except ProviderError:
-                uncertainties.append(
-                    f"provider returned {status}; retried once and failed again"
-                )
-                if tolerate_exhausted:
-                    return None
-                raise
-            uncertainties.append(
-                f"provider returned {status}; retried once and succeeded"
-            )
-            return result, model
+            except ProviderAPIError as exc:
+                if not _is_transient(exc):
+                    raise
+                last_exc = exc
+                if attempt < MAX_TRANSIENT_ATTEMPTS - 1:
+                    # Free-tier hosts (OpenRouter, TokenRouter) throttle (429)
+                    # and overload (503) in bursts, so a single retry is not
+                    # enough; back off and try again before giving up.
+                    self.sleep(2.0 * (attempt + 1))
+                continue
+            else:
+                if last_exc is not None:
+                    uncertainties.append(
+                        f"provider returned {last_exc.status_code}; retried and "
+                        "succeeded"
+                    )
+                return result, model
+        # Every attempt failed with a transient status code.
+        status = last_exc.status_code if last_exc is not None else None
+        uncertainties.append(
+            f"provider returned {status}; retried {MAX_TRANSIENT_ATTEMPTS} "
+            "times, all transient"
+        )
+        if tolerate_exhausted:
+            return None
+        assert last_exc is not None
+        raise last_exc
 
 
 def _verdict_text(verdict: Classification, plan_model: str, act_model: str) -> str:
@@ -294,8 +305,15 @@ def _verdict_text(verdict: Classification, plan_model: str, act_model: str) -> s
     )
 
 
-def _is_agentrouter_transient(exc: ProviderAPIError) -> bool:
-    return exc.provider == "agentrouter" and exc.status_code in (405, 429, 502, 503)
+#: Status codes that mean transient infrastructure, not a bad request. These
+#: are retried regardless of which provider answered — AgentRouter's WAF,
+#: OpenRouter's throttling, and TokenRouter's overload all surface here.
+TRANSIENT_STATUS: tuple[int, ...] = (405, 429, 502, 503)
+MAX_TRANSIENT_ATTEMPTS = 3
+
+
+def _is_transient(exc: ProviderAPIError) -> bool:
+    return exc.status_code in TRANSIENT_STATUS
 
 
 def _phase_model(session: Session, tier: int) -> tuple[str, str | None]:
