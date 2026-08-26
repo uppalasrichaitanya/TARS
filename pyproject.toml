@@ -16,6 +16,7 @@ dependencies = []
 anthropic = ["anthropic>=0.40"]
 openai = ["openai>=1.40"]
 providers = ["anthropic>=0.40", "openai>=1.40"]
+browser = ["playwright>=1.40"]
 dev = ["anthropic>=0.40", "openai>=1.40", "pytest>=8"]
 
 [project.scripts]
@@ -31,6 +32,7 @@ tars-memory = "tars.memory.cli:main"
 # The loop itself - the product the other three were built to serve. Bare `tars`
 # opens the REPL; subcommands are one-shot forms of the same phases.
 tars = "tars.loop.cli:main"
+tars-browser = "tars.browser.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["tars*"]

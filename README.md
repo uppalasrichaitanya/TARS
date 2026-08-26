@@ -30,6 +30,17 @@ Flags: `--yes`, `--root`, `--model`
 
 <sub>declared in `pyproject.toml`</sub>
 
+### `tars-browser`
+
+Efficient accessibility-tree-first web testing.
+
+```console
+tars-browser
+python -m tars.browser
+```
+
+<sub>declared in `pyproject.toml`</sub>
+
 ### `tars-memory`
 
 Read a session transcript and propose the memory entries it earned: domain-tagged, scored, and quoted from the turn they came from. Also reads back what earlier sessions kept.
@@ -137,6 +148,8 @@ reflect_on("run/session.jsonl").nothing_worth_remembering
     - `tars/act/local.py` — The built-in executor: this machine, this repo, stdlib only.
     - `tars/act/registry.py` — Which executor does ACT's work, chosen by name rather than by import.
     - `tars/act/types.py` — What ACT was asked to do, and what came of it.
+  - `tars/browser/__init__.py` — Efficient, accessibility-tree-first browser testing. (`python -m tars.browser`)
+    - `tars/browser/cli.py` — `tars-browser`: scriptable accessibility-tree web tests.
   - `tars/loop/__init__.py` — TARS loop orchestrator — the seven phases, driven.
     - `tars/loop/_io.py` — Small output helpers for the REPL.
     - `tars/loop/cli.py` — `tars` — persistent REPL and one-shot loop commands.
@@ -153,9 +166,7 @@ reflect_on("run/session.jsonl").nothing_worth_remembering
     - `tars/memory/signals.py` — Detectors for the sentence in core directive 4.
     - `tars/memory/similarity.py` — Small lexical similarity for memory retrieval without an embedding service.
     - `tars/memory/store.py` — Where kept entries live: domain-partitioned JSON, plus one review queue.
-    - `tars/memory/transcript.py` — Turning whatever the loop kept into turns the writer can quote.
-    - `tars/memory/types.py` — Types the memory writer speaks: what a candidate is, and what makes one
-- …and 28 more modules
+- …and 30 more modules
 
 Tests live in `tests/`.
 

@@ -28,7 +28,7 @@ The spec lives in `master_agent_loop.md`. Its five non-negotiable directives:
 
 | | |
 |---|---|
-| Tests | **1035 passed, 0 failed, 2 skipped** |
+| Tests | **1044 passed, 0 failed, 3 skipped** |
 | `tars-verify .` | **PASS 4/4** |
 | Transient retry | **SHIPPED + hardened** (2026-08-26): 405/429/502/503 from **any** provider (not just AgentRouter) now retry, up to 3 attempts with exponential backoff (2s, 4s, injectable sleeper); PLAN exhaustion interrupts, ACT exhaustion degrades to an honest report. Previously gated to `agentrouter` only, so OpenRouter/TokenRouter 429/503 raised immediately — fatal for free tier-0 |
 | Session persistence | **SHIPPED** (2026-08-26): append-only JSONL, `/resume [ID]`, durable `/clear`, same-root discovery in `/status`; interrupted runs never resume mid-ACT |
@@ -171,11 +171,15 @@ model is live so it is never a mystery.
 
 ## 6. Remaining after the REPL
 
-1. **`browser-test-efficient`** — a11y-tree-first navigation, action batching,
-   selector caching. The spec calls it the sharpest technical differentiator and
-   says to save it until the loop is solid. Needs `playwright`. Note it is in the
-   spec's skills list but was never in `overnight_build.sh`'s phase list, so the
-   overnight run was never going to build it.
+1. **`browser-test-efficient`** — SHIPPED: `tars/browser` provides a lazy,
+   optional Playwright/Chromium `BrowserSession`, compact accessibility-tree
+   snapshots with session-stable refs, ref-addressed actions, and the
+   `tars-browser` snapshot/run/check CLI. Hermetic serializer/CLI tests pass.
+   Playwright's Python package was installed while verifying this slice, but
+   its Chromium download did not complete, so the guarded browser round-trip
+   remains unverified here. Refs are stable while Chromium reports the same
+   backend DOM node; SPA replacement of a node necessarily invalidates that ref
+   and fails loudly.
  2. **Semantic recall for memory — SHIPPED (lexical, zero-dep).** ORIENT now asks
     "what do we know *related* to this?" via `MemoryStore.recall_related(query)`:
     corpus-local TF-IDF cosine over the live entries, ranked across domains, live
@@ -211,9 +215,24 @@ model is live so it is never a mystery.
  7. **Semantic recall for memory** — SHIPPED; see item 2. Built lexical/zero-dep
     (no embedding source needed), so the design decision resolved to "keep memory
     local and dependency-free". Session persistence provides the corpus it scans.
-  8. **browser-test-efficient** — a11y-tree-first web testing via playwright;
-     the spec's "sharpest technical differentiator". The loop is now solid,
-     so this is next after semantic recall's design conversation.
+ 8. **browser-test-efficient — SHIPPED (live-verified).** `tars/browser`
+      (`BrowserSession`) drives Chromium headless and returns a **compact text
+      accessibility tree** with stable session-local `ref`s — `goto`/`snapshot`/
+      `click`/`type`/`check`/`uncheck` + navigation, addressed by ref so the
+      agent never needs a screenshot or a vision model. This is the spec's
+      "sharpest differentiator", done cheaply (text I/O only). `tars-browser`
+      CLI: `snapshot`/`run`/`check` (exit 0/1/2). Playwright is the project's
+      one deliberate exception to the zero-dependency rule, kept an **optional
+      extra** (`[project.optional-dependencies] browser = ["playwright>=1.40"]`),
+      lazily imported inside the session so the core suite stays dependency-free.
+      **Live-verified** against real Chromium: `goto(data:…)` → `snapshot` →
+      `click(ref)` updated the DOM → re-`snapshot` reflected it. The first live
+      run exposed a bug in the *test*, not the module: `onclick="status.textContent=…"`
+      silently no-ops because `window.status` is a reserved global; fixed the
+      test to use an addEventListener, then it passed. Known limitation (in
+      code): a ref is tied to Chromium's backend DOM node, so an SPA that
+      replaces that node invalidates the ref and the action fails loudly rather
+      than hitting a wrong element.
   9. **Tier-0 free-model reality (verified by a live `/run`).** A mechanical
      task now classifies tier 0 and PLAN+ACT correctly route to the free
      `minimax/minimax-m3:free` (the 429 retry recovered mid-run). The
