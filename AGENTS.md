@@ -57,6 +57,13 @@ known, described in `map.md` §5, and is the first thing to fix.
 
 > **A 401 from AgentRouter means "client not whitelisted", NOT "bad key."**
 
+Probed 2026-08-26: the OpenAI-compatible `/v1` surface rejects the official
+OpenAI SDK on **both** `/chat/completions` and `/responses` — the whitelist is
+client-fingerprint-based, not endpoint-shaped. The codex key works only inside
+the Codex CLI itself. Consequence: **a GPT-5.6 provider adapter for TARS is
+blocked on AgentRouter's whitelist**, not on code — do not attempt to build one
+until a client is whitelisted or different credentials exist.
+
 Do not go hunting for a new token, and do not try to forge a whitelisted client's
 fingerprint. Route through the official SDK — that is why
 `tars/providers/agentrouter_provider.py` subclasses the Anthropic adapter instead

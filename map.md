@@ -175,12 +175,20 @@ model is live so it is never a mystery.
    embedded side, with JSON/SQLite for the structured side. Only the structured
    side exists, so ORIENT cannot yet ask "what do we know *related* to this?" The
    spec calls this "the real synergy point".
-3. **GPT-5.6 path** — blocked on a second AgentRouter key that isn't on this
-   machine. Its Codex config uses `wire_api = "responses"`, so if only
-   `/v1/responses` is served this is a new adapter, not a config line.
-4. **Smaller, optional:** consolidate the (soon four) duplicated
-   `_color`/`isatty` helpers across the CLIs; `overnight_build.sh` still has no
-   lockfile and no resume point, so relaunching restarts from phase one.
+ 3. **GPT-5.6 path — BLOCKED on AgentRouter's client whitelist.** Probed
+    2026-08-26 with the codex key: the `/v1` surface 401s the official OpenAI
+    SDK on both `/chat/completions` and `/responses` (`unauthorized_client_error`),
+    so the whitelist is client-fingerprint-based, not endpoint-shaped. The key
+    works only inside Codex CLI itself. No adapter helps; needs a whitelisted
+    client or different credentials.
+ 4. **Smaller, optional:** consolidate the (soon four) duplicated
+    `_color`/`isatty` helpers across the CLIs; `overnight_build.sh` still has no
+    lockfile and no resume point, so relaunching restarts from phase one.
+ 5. **Directive 3 is classified but not enacted** — the router emits a tier,
+    yet PLAN/ACT always use `session.model`. Wiring tier→model selection
+    (e.g. tier 0 → a cheap model) would make "cheapest capable path" real.
+ 6. **Transient provider errors are not auto-retried** — trap #6's rule says
+    retry once on WAF-style failures; today that retry is manual.
 
 ---
 
@@ -222,11 +230,12 @@ Applied to everything above, and to everything still to come:
 
 1. ~~Fix the seam, build the loop, ship `tars`~~ — done, live-verified
    (see §5).
-2. A live `/run` on a repo **with a real check surface** — so VERIFY grades
-   an actual fix rather than reporting no-checks. TARS itself is the
-   natural target.
-3. GPT-5.6 provider path — the second AgentRouter key exists (Codex uses
-   it); needs either a Responses-API adapter or confirming the OpenAI
-   surface accepts our client.
-4. Then §6 as written: browser-test-efficient, semantic recall, and the
-   smaller optional items.
+2. ~~A live `/run` on a repo with a real check surface~~ — done, verified
+   2026-08-26 (FAIL → PASS graded by real pytest).
+3. ~~GPT-5.6 provider path~~ — **blocked on AgentRouter's client whitelist**
+   (probed; see §6 item 3). Parked until a whitelisted client or new
+   credentials exist.
+4. **Session persistence** — plan first, build after review (the hinge for
+   semantic recall).
+5. Then §6: tier→model routing, transient-retry, browser-test-efficient,
+   semantic recall, smaller items.
