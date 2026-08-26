@@ -95,13 +95,22 @@ def test_engine_wires_all_phases_and_reports_uncertainties(
             "browser_snapshot",
             "browser_click",
             "browser_type",
+            "browser_check",
+            "browser_uncheck",
+            "browser_back",
+            "browser_forward",
+            "browser_reload",
         ]
         assert model == "fake"
         if provider_calls == 1:
             events.append("plan")
             assert messages[-1] == Message.user("fix it")
             assert messages[0].role == "system"
-            assert "Use stdlib only." in (messages[0].content or "")
+            assert any(
+                "Use stdlib only." in (message.content or "")
+                for message in messages
+                if message.role == "system"
+            )
             return _response("We decided to keep the change small.")
         events.append("act")
         assert "tier 1" in output.getvalue()
@@ -294,6 +303,11 @@ def test_engine_round_trips_a_tool_call_until_model_finishes(tmp_path: Path) -> 
         "browser_snapshot",
         "browser_click",
         "browser_type",
+        "browser_check",
+        "browser_uncheck",
+        "browser_back",
+        "browser_forward",
+        "browser_reload",
     )
     assert calls[1][1] == calls[0][1]
 
