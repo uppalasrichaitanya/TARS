@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from time import sleep as _sleep
 from typing import Protocol, TextIO
 
 from .. import memory, providers, router, verification
@@ -10,7 +11,11 @@ from ..act import RETRYABLE_REASONS
 from ..memory.types import MemoryEntry, ReflectionReport
 from ..providers import LLMResponse, Message, ToolDef, resolve_model
 from ..providers import ToolCall as ProviderToolCall
-from ..providers.errors import ProviderError, ProviderNotConfiguredError
+from ..providers.errors import (
+    ProviderAPIError,
+    ProviderError,
+    ProviderNotConfiguredError,
+)
 from ..router import Classification
 from ..verification import GateReport
 from .session import Session
@@ -20,6 +25,7 @@ from .types import RunPromptSpec, RunReport, ToolCall, ToolResult
 ProviderCall = Callable[
     [Sequence[Message], Sequence[ToolDef] | None, str | None], LLMResponse
 ]
+Sleep = Callable[[float], None]
 
 
 class ToolDispatcher(Protocol):
@@ -87,6 +93,7 @@ class Engine:
         verify: Callable[..., GateReport] = verification.verify,
         propose: Callable[..., ReflectionReport] = memory.propose,
         toolbox: Callable[..., ToolDispatcher] = _local_toolbox,
+        sleep: Sleep = _sleep,
     ) -> None:
         self.provider = provider
         self.recall = recall
@@ -94,6 +101,7 @@ class Engine:
         self.verify = verify
         self.propose = propose
         self.toolbox = toolbox
+        self.sleep = sleep
 
     def run(
         self,
@@ -135,11 +143,20 @@ class Engine:
         session.record(Message.user(spec.task))
         orientation = _orientation(recalled)
 
-        def generate(model: str) -> tuple[LLMResponse, str]:
+        def generate(
+            model: str, *, act: bool = False
+        ) -> tuple[LLMResponse, str] | None:
+            """Call the provider once, retrying AgentRouter infrastructure failures."""
+            return self._provider_with_retry(
+                (*orientation, *session.messages),
+                model,
+                uncertainties,
+                tolerate_exhausted=act,
+            )
+
+        def generate_with_fallback(model: str) -> tuple[LLMResponse, str] | None:
             try:
-                return self.provider(
-                    (*orientation, *session.messages), TOOL_DEFS, model
-                ), model
+                return generate(model)
             except ProviderNotConfiguredError:
                 if verdict.tier != 0 or model == session.model:
                     raise
@@ -149,11 +166,11 @@ class Engine:
                 )
                 if message not in uncertainties:
                     uncertainties.append(message)
-                return self.provider(
-                    (*orientation, *session.messages), TOOL_DEFS, session.model
-                ), session.model
+                return generate(session.model)
 
-        plan, plan_model = generate(phase_model)
+        plan_result = generate_with_fallback(phase_model)
+        assert plan_result is not None
+        plan, plan_model = plan_result
         phase_model = plan_model
         verdict_text = _verdict_text(verdict, plan_model, phase_model)
         _write(stream, f"CLASSIFY: {verdict_text}\n")
@@ -190,16 +207,21 @@ class Engine:
         )
         action = plan
         act_model = phase_model
+        act_provider_failed = False
         while turns < spec.max_turns:
-            action, act_model = generate(act_model)
+            action_result = generate(act_model, act=True)
             turns += 1
+            if action_result is None:
+                act_provider_failed = True
+                break
+            action, act_model = action_result
             session.record(
                 Message.assistant(action.text or None, tool_calls=action.tool_calls)
             )
             if not action.tool_calls:
                 break
             dispatch(action.tool_calls)
-        if action.tool_calls and turns >= spec.max_turns:
+        if not act_provider_failed and action.tool_calls and turns >= spec.max_turns:
             uncertainties.append("max_turns reached while tool calls remained.")
 
         gate = self.verify(root=session.root)
@@ -234,6 +256,35 @@ class Engine:
         session.record_event("run_finished", {"task": spec.task})
         return report
 
+    def _provider_with_retry(
+        self,
+        messages: Sequence[Message],
+        model: str,
+        uncertainties: list[str],
+        *,
+        tolerate_exhausted: bool,
+    ) -> tuple[LLMResponse, str] | None:
+        try:
+            return self.provider(messages, TOOL_DEFS, model), model
+        except ProviderAPIError as exc:
+            if not _is_agentrouter_transient(exc):
+                raise
+            status = exc.status_code
+            self.sleep(2.0)
+            try:
+                result = self.provider(messages, TOOL_DEFS, model)
+            except ProviderError:
+                uncertainties.append(
+                    f"provider returned {status}; retried once and failed again"
+                )
+                if tolerate_exhausted:
+                    return None
+                raise
+            uncertainties.append(
+                f"provider returned {status}; retried once and succeeded"
+            )
+            return result, model
+
 
 def _verdict_text(verdict: Classification, plan_model: str, act_model: str) -> str:
     reversible = "reversible" if verdict.reversible else "not reversible"
@@ -241,6 +292,10 @@ def _verdict_text(verdict: Classification, plan_model: str, act_model: str) -> s
         f"tier {verdict.tier} · {verdict.blast} blast · {reversible} · "
         f"PLAN model={plan_model} · ACT model={act_model}"
     )
+
+
+def _is_agentrouter_transient(exc: ProviderAPIError) -> bool:
+    return exc.provider == "agentrouter" and exc.status_code in (405, 429, 502, 503)
 
 
 def _phase_model(session: Session, tier: int) -> tuple[str, str | None]:

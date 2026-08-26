@@ -433,3 +433,163 @@ def test_provider_not_configured_on_tier_zero_falls_back_and_continues(
     assert report.uncertainties[0] == (
         "tier 0 requested a cheaper model, but none was usable; used flagship"
     )
+
+
+def test_agentrouter_transient_provider_error_retries_once_and_records_uncertainty(
+    tmp_path: Path,
+) -> None:
+    from tars.loop.engine import Engine
+    from tars.providers.errors import ProviderAPIError
+
+    calls = 0
+    sleeps: list[float] = []
+
+    def provider(_messages, _tools, _model):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise ProviderAPIError("HTTP 405", provider="agentrouter", status_code=405)
+        return _response("done")
+
+    report = Engine(
+        provider=provider,
+        sleep=sleeps.append,
+        verify=lambda **_kwargs: GateReport(root=str(tmp_path), results=()),
+    ).run(RunPromptSpec("task"), Session(root=tmp_path, model="agentrouter:fake"))
+
+    assert calls == 3  # PLAN retry succeeds, then one ACT turn
+    assert sleeps == [2.0]
+    assert report.uncertainties == (
+        "provider returned 405; retried once and succeeded",
+    )
+
+
+def test_double_agentrouter_transient_error_is_reported_and_raised(
+    tmp_path: Path,
+) -> None:
+    from tars.loop.engine import Engine
+    from tars.providers.errors import ProviderAPIError
+
+    calls = 0
+
+    def provider(_messages, _tools, _model):
+        nonlocal calls
+        calls += 1
+        raise ProviderAPIError("HTTP 405", provider="agentrouter", status_code=405)
+
+    with pytest.raises(ProviderAPIError):
+        Engine(provider=provider, sleep=lambda _seconds: None).run(
+            RunPromptSpec("task"), Session(root=tmp_path, model="agentrouter:fake")
+        )
+    assert calls == 2
+
+
+def test_double_405_act_turn_reaches_report_with_uncertainty(tmp_path: Path) -> None:
+    from tars.loop.engine import Engine
+    from tars.providers.errors import ProviderAPIError
+
+    calls = 0
+
+    def provider(_messages, _tools, _model):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return _response("plan")
+        raise ProviderAPIError("HTTP 405", provider="agentrouter", status_code=405)
+
+    report = Engine(
+        provider=provider,
+        sleep=lambda _seconds: None,
+        verify=lambda **_kwargs: GateReport(root=str(tmp_path), results=()),
+    ).run(
+        RunPromptSpec("task", max_turns=2),
+        Session(root=tmp_path, model="agentrouter:fake"),
+    )
+    assert calls == 3
+    assert report.uncertainties == (
+        "provider returned 405; retried once and failed again",
+    )
+
+
+def test_non_agentrouter_provider_errors_are_not_retried(tmp_path: Path) -> None:
+    from tars.loop.engine import Engine
+    from tars.providers.errors import ProviderAPIError
+
+    calls = 0
+
+    def provider(_messages, _tools, _model):
+        nonlocal calls
+        calls += 1
+        raise ProviderAPIError("HTTP 503", provider="openrouter", status_code=503)
+
+    with pytest.raises(ProviderAPIError):
+        Engine(provider=provider, sleep=lambda _seconds: None).run(
+            RunPromptSpec("task"), Session(root=tmp_path, model="openrouter:fake")
+        )
+    assert calls == 1
+
+
+def test_tier_zero_fallback_happens_before_flagship_transient_retry(
+    tmp_path: Path,
+) -> None:
+    from tars.loop.engine import Engine
+    from tars.providers.errors import ProviderAPIError, ProviderNotConfiguredError
+
+    calls: list[str] = []
+
+    def provider(_messages, _tools, model):
+        calls.append(model)
+        if model == "cheap":
+            raise ProviderNotConfiguredError("cheap unavailable")
+        if len([item for item in calls if item == "flagship"]) == 1:
+            raise ProviderAPIError("HTTP 503", provider="agentrouter", status_code=503)
+        return _response("done")
+
+    Engine(
+        provider=provider,
+        sleep=lambda _seconds: None,
+        classify=lambda _task: Classification(0, "low", True, (), "small"),
+        verify=lambda **_kwargs: GateReport(root=str(tmp_path), results=()),
+    ).run(
+        RunPromptSpec("task"),
+        Session(root=tmp_path, model="flagship", tier_models={"0": "cheap"}),
+    )
+    assert calls == ["cheap", "flagship", "flagship", "flagship"]
+
+
+def test_agentrouter_auth_error_is_never_retried(tmp_path: Path) -> None:
+    from tars.loop.engine import Engine
+    from tars.providers.errors import ProviderAPIError
+
+    calls = 0
+
+    def provider(_messages, _tools, _model):
+        nonlocal calls
+        calls += 1
+        raise ProviderAPIError("HTTP 401", provider="agentrouter", status_code=401)
+
+    with pytest.raises(ProviderAPIError):
+        Engine(provider=provider, sleep=lambda _seconds: None).run(
+            RunPromptSpec("task"), Session(root=tmp_path, model="agentrouter:fake")
+        )
+    assert calls == 1
+
+
+def test_agentrouter_auth_error_during_act_still_interrupts(tmp_path: Path) -> None:
+    from tars.loop.engine import Engine
+    from tars.providers.errors import ProviderAPIError
+
+    calls = 0
+
+    def provider(_messages, _tools, _model):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return _response("plan")
+        raise ProviderAPIError("HTTP 401", provider="agentrouter", status_code=401)
+
+    with pytest.raises(ProviderAPIError):
+        Engine(provider=provider, sleep=lambda _seconds: None).run(
+            RunPromptSpec("task"), Session(root=tmp_path, model="agentrouter:fake")
+        )
+    assert calls == 2
