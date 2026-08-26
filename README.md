@@ -2,6 +2,10 @@
 
 TARS — a disciplined, multi-session coding agent loop
 
+## Why it exists
+
+Named for TARS - the robot from Interstellar - whose worth lies not in cleverness but in discipline: it does what it said, reports honestly what it did, and asks before it touches anything. This tool tries to earn that name.
+
 ## Install
 
 ```console
@@ -139,6 +143,7 @@ reflect_on("run/session.jsonl").nothing_worth_remembering
     - `tars/loop/engine.py` — The seven-phase loop, composed from TARS's tested phase modules.
     - `tars/loop/repl.py` — The persistent slash-command interface over one live :class:`Session`.
     - `tars/loop/session.py` — What persists between commands.
+    - `tars/loop/session_store.py` — Durable event log for REPL sessions.
     - `tars/loop/tools.py` — Model-facing ACT tools.
     - `tars/loop/types.py` — The loop's own vocabulary.
   - `tars/memory/__init__.py` — TARS memory writer — PHASE 6 (REFLECT), isolated. (`python -m tars.memory`)
@@ -150,8 +155,7 @@ reflect_on("run/session.jsonl").nothing_worth_remembering
     - `tars/memory/transcript.py` — Turning whatever the loop kept into turns the writer can quote.
     - `tars/memory/types.py` — Types the memory writer speaks: what a candidate is, and what makes one
   - `tars/providers/__init__.py` — TARS provider adapter layer.
-    - `tars/providers/_openai_compat.py` — Translation shared by every OpenAI-compatible endpoint.
-- …and 25 more modules
+- …and 26 more modules
 
 Tests live in `tests/`.
 

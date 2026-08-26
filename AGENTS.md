@@ -48,7 +48,7 @@ known, described in `map.md` §5, and is the first thing to fix.
 
 ---
 
-## Five traps that will cost you hours
+## Seven traps that will cost you hours
 
 ### 1. AgentRouter whitelists client software
 
@@ -126,6 +126,12 @@ block page — while other calls in the same run pass. Retry once; if it fails
 again, report interrupted-with-reason, never as verified or failed-by-content.
 Never paste the block-page HTML into user-facing output. This is their
 infrastructure, not the whitelist rule (that one is a 401).
+
+### 7. Session logs contain raw tool output
+
+Once session persistence lands, `~/.tars/sessions/` persists raw tool output
+unencrypted. Treat those files as sensitive; never paste their contents into
+commits, logs, or output.
 
 ---
 
