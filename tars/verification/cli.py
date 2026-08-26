@@ -19,12 +19,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import TextIO
 
+from .._cli_helpers import is_tty as _is_tty
+from .._cli_helpers import use_color as _use_color
 from .detect import detect_candidates
 from .gate import select_checks, verify
 from .runner import DEFAULT_TIMEOUT_S, build_child_env, resolve_executable
@@ -308,20 +309,6 @@ def _split_kinds(values: Iterable[str]) -> set[str]:
                 )
             kinds.add(part)
     return kinds
-
-
-def _is_tty(stream: TextIO) -> bool:
-    try:
-        return bool(stream.isatty())
-    except (AttributeError, ValueError):  # pragma: no cover - closed/odd stream
-        return False
-
-
-def _use_color(stream: TextIO, no_color: bool) -> bool:
-    # NO_COLOR is the cross-tool convention; honour it before anything else.
-    if no_color or os.environ.get("NO_COLOR"):
-        return False
-    return _is_tty(stream)
 
 
 def _elide(text: str, width: int) -> str:

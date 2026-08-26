@@ -30,13 +30,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from collections.abc import Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TextIO
 
+from .._cli_helpers import use_color
 from .propose import MAX_CANDIDATES, propose
 from .store import MemoryStore
 from .transcript import load_transcript
@@ -464,13 +464,7 @@ def _reject(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
 
 
 def _color(stream: TextIO, args: argparse.Namespace) -> bool:
-    # NO_COLOR is the cross-tool convention; honour it before anything else.
-    if args.no_color or os.environ.get("NO_COLOR"):
-        return False
-    try:
-        return bool(stream.isatty())
-    except (AttributeError, ValueError):  # pragma: no cover - closed/odd stream
-        return False
+    return use_color(stream, no_color=args.no_color)
 
 
 def _paint(text: str, code: str, color: bool) -> str:

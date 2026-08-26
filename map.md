@@ -28,7 +28,7 @@ The spec lives in `master_agent_loop.md`. Its five non-negotiable directives:
 
 | | |
 |---|---|
-| Tests | **1044 passed, 0 failed, 3 skipped** |
+| Tests | **1055 passed, 0 failed, 3 skipped** |
 | `tars-verify .` | **PASS 4/4** |
 | Transient retry | **SHIPPED + hardened** (2026-08-26): 405/429/502/503 from **any** provider (not just AgentRouter) now retry, up to 3 attempts with exponential backoff (2s, 4s, injectable sleeper); PLAN exhaustion interrupts, ACT exhaustion degrades to an honest report. Previously gated to `agentrouter` only, so OpenRouter/TokenRouter 429/503 raised immediately — fatal for free tier-0 |
 | Session persistence | **SHIPPED** (2026-08-26): append-only JSONL, `/resume [ID]`, durable `/clear`, same-root discovery in `/status`; interrupted runs never resume mid-ACT |
@@ -171,15 +171,16 @@ model is live so it is never a mystery.
 
 ## 6. Remaining after the REPL
 
-1. **`browser-test-efficient`** — SHIPPED: `tars/browser` provides a lazy,
-   optional Playwright/Chromium `BrowserSession`, compact accessibility-tree
-   snapshots with session-stable refs, ref-addressed actions, and the
-   `tars-browser` snapshot/run/check CLI. Hermetic serializer/CLI tests pass.
-   Playwright's Python package was installed while verifying this slice, but
-   its Chromium download did not complete, so the guarded browser round-trip
-   remains unverified here. Refs are stable while Chromium reports the same
-   backend DOM node; SPA replacement of a node necessarily invalidates that ref
-   and fails loudly.
+1. **`browser-test-efficient` — SHIPPED + live-verified + loop-wired.**
+   `tars/browser` provides a lazy, optional Playwright/Chromium `BrowserSession`
+   with compact accessibility-tree snapshots and session-stable refs, plus
+   `tars-browser` snapshot/run/check CLI. The **loop now drives it**: VERIFY can
+   check a web surface via `tars.browser.cli.run_browser_task` (exposed as
+   `verification.verify_web` and `tars run --web-url/--web-steps/--web-expect`),
+   and ACT exposes `browser_goto`/`snapshot`/`click`/`type` tools (lazy,
+   `tars[browser]` optional, refs are session-local). Live-verified end-to-end
+   against real Chromium. Refs remain stable while Chromium reports the same
+   backend DOM node; SPA replacement invalidates the ref and fails loudly.
  2. **Semantic recall for memory — SHIPPED (lexical, zero-dep).** ORIENT now asks
     "what do we know *related* to this?" via `MemoryStore.recall_related(query)`:
     corpus-local TF-IDF cosine over the live entries, ranked across domains, live
@@ -188,16 +189,20 @@ model is live so it is never a mystery.
     the zero-dependency invariant — true embeddings would need a dependency or
     external API. Accepted limitation (documented in code): pure paraphrases with no
     shared words don't match. The zero-dep guard test (`test_the_memory_writer_needs_no_third_party_package`)
-    covers it transitively. Gate PASS 4/4 (1035 passed); `tars-readme --check` exit 0.
+    covers it transitively. Gate PASS 4/4 (1055 passed); `tars-readme --check` exit 0.
  3. **GPT-5.6 path — BLOCKED on AgentRouter's client whitelist.** Probed
     2026-08-26 with the codex key: the `/v1` surface 401s the official OpenAI
     SDK on both `/chat/completions` and `/responses` (`unauthorized_client_error`),
     so the whitelist is client-fingerprint-based, not endpoint-shaped. The key
     works only inside Codex CLI itself. No adapter helps; needs a whitelisted
     client or different credentials.
- 4. **Smaller, optional:** consolidate the (soon four) duplicated
-    `_color`/`isatty` helpers across the CLIs; `overnight_build.sh` still has no
-    lockfile and no resume point, so relaunching restarts from phase one.
+ 4. **Smaller, optional — DONE:** `_color`/`isatty` helpers were duplicated
+    across four CLIs; consolidated into `tars/_cli_helpers.py` (`is_tty`/
+    `use_color`) and reused by `tars/verification`, `tars/readme`,
+    `tars/memory`, and `tars/loop/_io`. `overnight_build.sh` now has a
+    `flock` lockfile (`.overnight_build.lock`) and a `run/progress` resume
+    file — a second launch exits, and a relaunch skips already-done phases via
+    `already_done`/`mark_done`.
  5. ~~**Directive 3 is classified but not enacted**~~ — DONE 2026-08-26:
     tier 0 routes to a configurable cheap model (`TARS_TIER0_MODEL` env or
     config event; unset → honest flagship fallback with an uncertainty line),

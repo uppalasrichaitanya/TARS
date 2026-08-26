@@ -24,7 +24,16 @@ from ..act import (
 from .types import ToolCall, ToolResult
 
 Confirm = Callable[[str], bool]
-TOOL_NAMES = ("read_file", "list_dir", "apply_edit", "run_command")
+TOOL_NAMES = (
+    "read_file",
+    "list_dir",
+    "apply_edit",
+    "run_command",
+    "browser_goto",
+    "browser_snapshot",
+    "browser_click",
+    "browser_type",
+)
 
 
 class Toolbox:
@@ -36,11 +45,42 @@ class Toolbox:
         *,
         executor: Executor | None = None,
         confirm: Confirm | None = None,
+        browser_factory: Callable[[], Any] | None = None,
     ) -> None:
         self.root = Path(root)
         self.executor = executor or LocalExecutor(self.root)
         self._preview = LocalExecutor(self.root, dry_run=True)
         self.confirm = confirm or (lambda _diff: False)
+        self._browser_session: Any | None = None
+        self._browser_factory = browser_factory
+        self._browser_error: str | None = None
+
+    def _get_browser(self) -> Any:
+        if self._browser_session is not None:
+            return self._browser_session
+        if self._browser_error is not None:
+            raise RuntimeError(self._browser_error)
+        try:
+            from tars.browser import BrowserSession
+        except ImportError as exc:
+            self._browser_error = "browser extra not installed; install tars[browser]"
+            raise RuntimeError(self._browser_error) from exc
+        factory = self._browser_factory or BrowserSession  # type: ignore[assignment]
+        try:
+            browser = factory()
+            # Support both context-manager and plain instance factories
+            if hasattr(browser, "__enter__"):
+                browser = browser.__enter__()
+            self._browser_session = browser
+            return self._browser_session
+        except RuntimeError:
+            raise
+        except ImportError as exc:
+            self._browser_error = "browser extra not installed; install tars[browser]"
+            raise RuntimeError(self._browser_error) from exc
+        except Exception as exc:
+            self._browser_error = str(exc)
+            raise RuntimeError(self._browser_error) from exc
 
     def dispatch(self, call: ToolCall) -> ToolResult:
         """Run one model request, converting expected failures to content."""
@@ -49,6 +89,10 @@ class Toolbox:
             "list_dir": self._list_dir,
             "apply_edit": self._apply_edit,
             "run_command": self._run_command,
+            "browser_goto": self._browser_goto,
+            "browser_snapshot": self._browser_snapshot,
+            "browser_click": self._browser_click,
+            "browser_type": self._browser_type,
         }
         handler = handlers.get(call.name)
         if handler is None:
@@ -127,6 +171,60 @@ class Toolbox:
         if result.stderr:
             output += ("\n" if output else "") + result.stderr
         return ToolResult.ok_result("run_command", output, touched=(command.display,))
+
+    def _browser_goto(self, args: Mapping[str, Any]) -> ToolResult:
+        url = _required_str(args, "url")
+        try:
+            self._get_browser().goto(url)
+        except RuntimeError as exc:
+            return ToolResult.error_result("browser_goto", str(exc))
+        except Exception as exc:  # noqa: BLE001
+            return ToolResult.error_result("browser_goto", str(exc))
+        return ToolResult.ok_result("browser_goto", f"navigated to {url}")
+
+    def _browser_snapshot(self, _args: Mapping[str, Any]) -> ToolResult:
+        try:
+            snapshot = self._get_browser().snapshot()
+        except RuntimeError as exc:
+            return ToolResult.error_result("browser_snapshot", str(exc))
+        except Exception as exc:  # noqa: BLE001
+            return ToolResult.error_result("browser_snapshot", str(exc))
+        return ToolResult.ok_result("browser_snapshot", snapshot)
+
+    def _browser_click(self, args: Mapping[str, Any]) -> ToolResult:
+        ref = args.get("ref")
+        if not isinstance(ref, int):
+            raise TypeError("ref must be an integer")
+        try:
+            self._get_browser().click(ref)
+        except (RuntimeError, KeyError) as exc:
+            return ToolResult.error_result("browser_click", str(exc))
+        except Exception as exc:  # noqa: BLE001
+            return ToolResult.error_result("browser_click", str(exc))
+        return ToolResult.ok_result("browser_click", f"clicked ref {ref}")
+
+    def _browser_type(self, args: Mapping[str, Any]) -> ToolResult:
+        ref = args.get("ref")
+        if not isinstance(ref, int):
+            raise TypeError("ref must be an integer")
+        text = args.get("text")
+        if not isinstance(text, str):
+            raise TypeError("text must be a string")
+        try:
+            self._get_browser().type(ref, text)
+        except (RuntimeError, KeyError) as exc:
+            return ToolResult.error_result("browser_type", str(exc))
+        except Exception as exc:  # noqa: BLE001
+            return ToolResult.error_result("browser_type", str(exc))
+        return ToolResult.ok_result("browser_type", f"typed into ref {ref}")
+
+    def close(self) -> None:
+        if self._browser_session is not None:
+            try:
+                self._browser_session.close()
+            except Exception:  # noqa: BLE001, S110
+                pass
+            self._browser_session = None
 
     def _inside(self, path: str) -> Path | None:
         return resolve_inside(self.root, path)

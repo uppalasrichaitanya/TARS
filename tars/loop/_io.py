@@ -7,26 +7,22 @@ while leaving the rest of the REPL concerned only with its messages.
 
 from __future__ import annotations
 
-import os
 import re
 from typing import TextIO
 
+from .._cli_helpers import is_tty as _helpers_is_tty
+from .._cli_helpers import use_color
 from ..providers.errors import ProviderError, ProviderNotConfiguredError
 
 
 def is_tty(stream: TextIO) -> bool:
     """Return whether *stream* is an interactive terminal."""
-    try:
-        return bool(stream.isatty())
-    except (AttributeError, ValueError):
-        return False
+    return _helpers_is_tty(stream)
 
 
 def color_enabled(stream: TextIO, *, no_color: bool = False) -> bool:
     """Return whether ANSI color should be emitted to *stream*."""
-    if no_color or os.environ.get("NO_COLOR"):
-        return False
-    return is_tty(stream)
+    return use_color(stream, no_color=no_color)
 
 
 def paint(text: str, code: str, *, enabled: bool) -> str:

@@ -17,6 +17,24 @@
 
 set -uo pipefail
 
+# ── Lock — a second launch exits, not restarts from phase one ──
+LOCK_FILE="$REPO_DIR/.overnight_build.lock"
+exec 9>"$LOCK_FILE" 2>/dev/null || true
+if command -v flock >/dev/null 2>&1; then
+  if ! flock -n 9; then
+    echo "overnight_build.sh is already running (lock $LOCK_FILE)" >&2
+    exit 1
+  fi
+fi
+trap 'rm -f "$LOCK_FILE" 2>/dev/null; exec 9>&- 2>/dev/null || true' EXIT
+
+# ── Resume point ──────────────────────────────────────────
+PROGRESS_FILE="$RUN_DIR/progress"
+mkdir -p "$RUN_DIR"
+touch "$PROGRESS_FILE"
+mark_done() { echo "$1" >> "$PROGRESS_FILE"; }
+already_done() { grep -qxF "$1" "$PROGRESS_FILE" 2>/dev/null; }
+
 # ── Config ────────────────────────────────────────────────
 REPO_DIR="$(pwd)"
 RUN_DIR="$REPO_DIR/run"
@@ -155,6 +173,10 @@ consecutive_failures=0
 for phase in "${FOUNDATION_PHASES[@]}"; do
   name="${phase%%:*}"; desc="${phase#*:}"
 
+  if already_done "foundation:$name"; then
+    log "── Foundation phase: $name — already done, skipping ──"
+    continue
+  fi
   if (( consecutive_failures >= MAX_CONSECUTIVE_FAILURES )); then
     log "HALT (foundation): $MAX_CONSECUTIVE_FAILURES consecutive failures. Needs a human before '$name'."
     break
@@ -168,6 +190,7 @@ for phase in "${FOUNDATION_PHASES[@]}"; do
     log "Phase '$name' finished. Committing checkpoint."
     git add -A
     git commit -m "checkpoint: $name (foundation)" --quiet || log "  (nothing to commit)"
+    mark_done "foundation:$name"
     consecutive_failures=0
   else
     log "Phase '$name' FAILED. See $PHASE_LOG."
@@ -181,6 +204,10 @@ log "── Foundation complete. Entering refinement loop (cap: $MAX_REFINE_ITER
 consecutive_failures=0
 
 for (( i=1; i<=MAX_REFINE_ITERATIONS; i++ )); do
+  if already_done "refine:$i"; then
+    log "── Refine iteration $i — already done, skipping ──"
+    continue
+  fi
   if (( consecutive_failures >= MAX_CONSECUTIVE_FAILURES )); then
     log "HALT (refine): $MAX_CONSECUTIVE_FAILURES consecutive failures. Stopping — needs a human."
     break
@@ -194,6 +221,7 @@ for (( i=1; i<=MAX_REFINE_ITERATIONS; i++ )); do
   if [ $exit_code -eq 0 ]; then
     git add -A
     git commit -m "refine iteration $i" --quiet || log "  (nothing to commit iteration $i)"
+    mark_done "refine:$i"
     consecutive_failures=0
 
     if grep -q "$SATISFIED_TOKEN" "$ITER_LOG"; then

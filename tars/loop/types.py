@@ -35,6 +35,23 @@ class Phase(StrEnum):
 
 
 @dataclass(frozen=True)
+class WebTarget:
+    """One web surface the loop should verify via the a11y tree."""
+
+    url: str
+    steps: tuple[dict[str, Any], ...] = ()
+    expect: tuple[dict[str, Any], ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.url or not self.url.strip():
+            raise ValueError("a web target needs a url")
+        for name in ("steps", "expect"):
+            value = getattr(self, name)
+            if not isinstance(value, tuple):
+                object.__setattr__(self, name, tuple(value))
+
+
+@dataclass(frozen=True)
 class RunPromptSpec:
     """One task, as `/run` received it."""
 
@@ -43,6 +60,8 @@ class RunPromptSpec:
     auto_confirm: bool = False
     #: Cap on model turns, so a loop that cannot converge still terminates.
     max_turns: int = 12
+    #: Optional web surface to verify after the repo gate.
+    web: WebTarget | None = None
 
     def __post_init__(self) -> None:
         if not self.task or not self.task.strip():

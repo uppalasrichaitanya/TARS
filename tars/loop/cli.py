@@ -25,7 +25,7 @@ from .engine import Engine
 from .repl import EngineRunner, Repl, _verdict, write_report
 from .session import Session
 from .session_store import SessionStore
-from .types import RunPromptSpec
+from .types import RunPromptSpec, WebTarget
 
 EXIT_OK = 0
 EXIT_FAILED = 1
@@ -55,6 +55,9 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--yes", action="store_true", help="approve ACT previews")
     run.add_argument("--root", default=".", metavar="PATH")
     run.add_argument("--model", metavar="MODEL")
+    run.add_argument("--web-url", metavar="URL", help="also verify a web surface")
+    run.add_argument("--web-steps", metavar="PATH", help="JSON file of browser steps")
+    run.add_argument("--web-expect", metavar="PATH", help="JSON file of expectations")
     route = subs.add_parser("route", help="classify one task without acting")
     route.add_argument("task")
     route.add_argument("--root", default=".", metavar="PATH")
@@ -96,8 +99,37 @@ def main(
     )
     runner = engine or Engine()
     try:
+        web: WebTarget | None = None
+        if getattr(args, "web_url", None):
+            import json
+
+            steps: tuple[dict, ...] = ()
+            expect: tuple[dict, ...] = ()
+            if args.web_steps:
+                try:
+                    raw = json.loads(Path(args.web_steps).read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError, ValueError) as exc:
+                    err.write(f"{PROG}: cannot read --web-steps: {exc}\n")
+                    return EXIT_USAGE
+                if not isinstance(raw, list):
+                    err.write(f"{PROG}: --web-steps must be a JSON list\n")
+                    return EXIT_USAGE
+                steps = tuple(raw)
+            if args.web_expect:
+                try:
+                    raw = json.loads(Path(args.web_expect).read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError, ValueError) as exc:
+                    err.write(f"{PROG}: cannot read --web-expect: {exc}\n")
+                    return EXIT_USAGE
+                if not isinstance(raw, list):
+                    err.write(f"{PROG}: --web-expect must be a JSON list\n")
+                    return EXIT_USAGE
+                expect = tuple(raw)
+            web = WebTarget(url=args.web_url, steps=steps, expect=expect)
         report = runner.run(
-            RunPromptSpec(args.task, auto_confirm=args.yes), session, output=out
+            RunPromptSpec(args.task, auto_confirm=args.yes, web=web),
+            session,
+            output=out,
         )
     except ProviderError as exc:
         err.write(provider_message(exc) + "\n")

@@ -26,7 +26,7 @@ Run TARS's disciplined agent loop.
 tars
 ```
 
-Flags: `--yes`, `--root`, `--model`
+Flags: `--yes`, `--root`, `--model`, `--web-url`, `--web-steps`, `--web-expect`
 
 <sub>declared in `pyproject.toml`</sub>
 
@@ -143,6 +143,7 @@ reflect_on("run/session.jsonl").nothing_worth_remembering
 ## How it's structured
 
 - `tars/__init__.py` — TARS — a disciplined, multi-session coding agent loop.
+  - `tars/_cli_helpers.py` — Shared CLI helpers: color and tty detection.
   - `tars/act/__init__.py` — TARS ACT — PHASE 4, isolated: the phase that actually touches the repo.
     - `tars/act/base.py` — The one interface every executor implements.
     - `tars/act/local.py` — The built-in executor: this machine, this repo, stdlib only.
@@ -165,8 +166,7 @@ reflect_on("run/session.jsonl").nothing_worth_remembering
     - `tars/memory/propose.py` — The REFLECT pass: read a transcript, propose what is worth remembering.
     - `tars/memory/signals.py` — Detectors for the sentence in core directive 4.
     - `tars/memory/similarity.py` — Small lexical similarity for memory retrieval without an embedding service.
-    - `tars/memory/store.py` — Where kept entries live: domain-partitioned JSON, plus one review queue.
-- …and 30 more modules
+- …and 32 more modules
 
 Tests live in `tests/`.
 

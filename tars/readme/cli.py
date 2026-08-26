@@ -28,12 +28,12 @@ from __future__ import annotations
 import argparse
 import difflib
 import json
-import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
 from typing import TextIO
 
+from .._cli_helpers import use_color
 from .inspection import DEFAULT_MAX_EXAMPLES, inspect_project
 from .render import render_readme
 from .types import ProjectFacts
@@ -290,13 +290,7 @@ def _diff(actual: str, expected: str, target: Path) -> list[str]:
 
 
 def _color(stream: TextIO, args: argparse.Namespace) -> bool:
-    # NO_COLOR is the cross-tool convention; honour it before anything else.
-    if args.no_color or os.environ.get("NO_COLOR"):
-        return False
-    try:
-        return bool(stream.isatty())
-    except (AttributeError, ValueError):  # pragma: no cover - closed/odd stream
-        return False
+    return use_color(stream, no_color=args.no_color)
 
 
 def _paint(text: str, code: str, color: bool) -> str:

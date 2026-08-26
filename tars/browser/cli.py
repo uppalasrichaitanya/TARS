@@ -61,6 +61,48 @@ def _load_list(path: str, label: str) -> list[dict[str, Any]]:
     return value
 
 
+def run_browser_task(
+    url: str,
+    steps: list[dict[str, Any]] | None,
+    expect: list[dict[str, Any]] | None,
+    *,
+    session_factory=BrowserSession,
+) -> tuple[int, str]:
+    """Execute one browser task and return the exit code plus a snapshot.
+
+    This is the shared core of the CLI and the verification web target.
+    ``steps`` may be ``None`` for a bare snapshot; ``expect`` may be ``None``
+    when no expectation check is desired.
+    """
+    with session_factory() as browser:
+        browser.goto(url)
+        if steps is None:
+            snap = browser.snapshot()
+            if expect is None:
+                return EXIT_OK, snap
+            return (EXIT_OK if _match(snap, expect) else EXIT_MISMATCH), snap
+        for step in steps:
+            action = step.get("action")
+            raw_ref = step.get("ref")
+            if not isinstance(raw_ref, (str, int)):
+                raise TypeError("step ref must be an integer")
+            ref = int(raw_ref)
+            if action == "click":
+                browser.click(ref)
+            elif action == "type":
+                browser.type(ref, str(step.get("text", "")))
+            elif action == "check":
+                browser.check(ref)
+            elif action == "uncheck":
+                browser.uncheck(ref)
+            else:
+                raise ValueError(f"unknown action: {action}")
+        snap = browser.snapshot()
+        if expect is None:
+            return EXIT_OK, snap
+        return (EXIT_OK if _match(snap, expect) else EXIT_MISMATCH), snap
+
+
 def main(
     argv: Sequence[str] | None = None,
     *,
@@ -77,34 +119,21 @@ def main(
         err.write(f"usage: tars-browser: {exc}\n")
         return EXIT_USAGE
     try:
-        with session_factory() as browser:
-            browser.goto(args.url)
-            if args.command == "snapshot":
-                out.write(browser.snapshot() + "\n")
-                return EXIT_OK
-            steps = _load_list(args.steps, "steps")
-            for step in steps:
-                action = step.get("action")
-                raw_ref = step.get("ref")
-                if not isinstance(raw_ref, (str, int)):
-                    raise TypeError("step ref must be an integer")
-                ref = int(raw_ref)
-                if action == "click":
-                    browser.click(ref)
-                elif action == "type":
-                    browser.type(ref, str(step.get("text", "")))
-                elif action == "check":
-                    browser.check(ref)
-                elif action == "uncheck":
-                    browser.uncheck(ref)
-                else:
-                    raise ValueError(f"unknown action: {action}")
-            snap = browser.snapshot()
+        if args.command == "snapshot":
+            code, snap = run_browser_task(
+                args.url, None, None, session_factory=session_factory
+            )
             out.write(snap + "\n")
-            if args.command == "check":
-                expectations = _load_list(args.expect, "expectations")
-                return EXIT_OK if _match(snap, expectations) else EXIT_MISMATCH
-            return EXIT_OK
+            return code
+        steps = _load_list(args.steps, "steps")
+        expect: list[dict[str, Any]] | None = None
+        if args.command == "check":
+            expect = _load_list(args.expect, "expectations")
+        code, snap = run_browser_task(
+            args.url, steps, expect, session_factory=session_factory
+        )
+        out.write(snap + "\n")
+        return code
     except (
         OSError,
         RuntimeError,

@@ -91,6 +91,10 @@ def test_engine_wires_all_phases_and_reports_uncertainties(
             "list_dir",
             "apply_edit",
             "run_command",
+            "browser_goto",
+            "browser_snapshot",
+            "browser_click",
+            "browser_type",
         ]
         assert model == "fake"
         if provider_calls == 1:
@@ -190,6 +194,10 @@ def test_engine_round_trips_a_tool_call_until_model_finishes(tmp_path: Path) -> 
         "list_dir",
         "apply_edit",
         "run_command",
+        "browser_goto",
+        "browser_snapshot",
+        "browser_click",
+        "browser_type",
     )
     assert calls[1][1] == calls[0][1]
 

@@ -78,6 +78,41 @@ TOOL_DEFS = (
             "required": ["argv"],
         },
     ),
+    ToolDef(
+        "browser_goto",
+        "Navigate the browser to a URL (requires tars[browser]).",
+        {
+            "type": "object",
+            "properties": {"url": {"type": "string"}},
+            "required": ["url"],
+        },
+    ),
+    ToolDef(
+        "browser_snapshot",
+        "Return the current accessibility tree as text.",
+        {"type": "object", "properties": {}},
+    ),
+    ToolDef(
+        "browser_click",
+        "Click an element by its a11y ref (from browser_snapshot).",
+        {
+            "type": "object",
+            "properties": {"ref": {"type": "integer"}},
+            "required": ["ref"],
+        },
+    ),
+    ToolDef(
+        "browser_type",
+        "Type text into an element by its a11y ref.",
+        {
+            "type": "object",
+            "properties": {
+                "ref": {"type": "integer"},
+                "text": {"type": "string"},
+            },
+            "required": ["ref", "text"],
+        },
+    ),
 )
 
 
@@ -91,6 +126,7 @@ class Engine:
         recall: Callable[..., tuple[MemoryEntry, ...]] = memory.recall_related,
         classify: Callable[[str], Classification] = router.classify,
         verify: Callable[..., GateReport] = verification.verify,
+        verify_web: Callable[..., GateReport] = verification.verify_web,
         propose: Callable[..., ReflectionReport] = memory.propose,
         toolbox: Callable[..., ToolDispatcher] = _local_toolbox,
         sleep: Sleep = _sleep,
@@ -99,6 +135,7 @@ class Engine:
         self.recall = recall
         self.classify = classify
         self.verify = verify
+        self.verify_web = verify_web
         self.propose = propose
         self.toolbox = toolbox
         self.sleep = sleep
@@ -225,6 +262,14 @@ class Engine:
             uncertainties.append("max_turns reached while tool calls remained.")
 
         gate = self.verify(root=session.root)
+        if spec.web is not None:
+            web_gate = self.verify_web(
+                spec.web.url,
+                list(spec.web.steps) if spec.web.steps else None,
+                list(spec.web.expect) if spec.web.expect else None,
+                root=session.root,
+            )
+            gate = _merge_gate(gate, web_gate)
         session.last_classification = verdict
         session.last_verdict = gate.verdict
         session.record_event(
@@ -253,6 +298,12 @@ class Engine:
             uncertainties=tuple(uncertainties),
             declined=tuple(declined),
         )
+        try:
+            close = getattr(toolbox, "close", None)
+            if callable(close):
+                close()
+        except Exception:  # noqa: BLE001, S110
+            pass
         session.record_event("run_finished", {"task": spec.task})
         return report
 
@@ -372,6 +423,16 @@ def _looks_like_shell_string(argv: object) -> bool:
     value = argv[0]
     return any(marker in value for marker in (" ", "&&", "|", ";")) or (
         len(value) >= 2 and value[0] == value[-1] and value[0] in "'\""
+    )
+
+
+def _merge_gate(left: GateReport, right: GateReport) -> GateReport:
+    return GateReport(
+        root=left.root,
+        results=(*left.results, *right.results),
+        duration_s=left.duration_s + right.duration_s,
+        not_selected=(*left.not_selected, *right.not_selected),
+        notes=(*left.notes, *right.notes),
     )
 
 

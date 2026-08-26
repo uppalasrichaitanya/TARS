@@ -60,6 +60,7 @@ from .types import (
     Verdict,
     sort_checks,
 )
+from .web import verify_web
 
 __all__ = [
     "ALL_KINDS",
@@ -84,4 +85,5 @@ __all__ = [
     "sort_checks",
     "unavailable_tools",
     "verify",
+    "verify_web",
 ]
