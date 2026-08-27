@@ -26,6 +26,14 @@ DEFAULT_AGENTROUTER_URL = "https://agentrouter.org"
 DEFAULT_TIER0 = "openrouter:minimax/minimax-m3:free"
 
 
+def _redact_values(text: str, values: Mapping[str, str]) -> str:
+    """Remove credentials even when an upstream error unexpectedly echoes one."""
+    for value in values.values():
+        if value:
+            text = text.replace(value, "***")
+    return text
+
+
 def parse_env_file(path: Path) -> dict[str, str]:
     """Read simple dotenv exports; malformed or commented lines are ignored."""
     values: dict[str, str] = {}
@@ -146,7 +154,23 @@ def run_setup(
                 [providers.Message.system("ping")], [], model_to_validate
             )
     except providers.ProviderError as exc:
-        output.write(f"Validation failed: {type(exc).__name__}. No files changed.\n")
+        from ._io import provider_message
+
+        output.write(f"Validation failed: {type(exc).__name__}.\n")
+        output.write(_redact_values(provider_message(exc), values) + "\n")
+        if isinstance(exc, providers.ProviderNotInstalledError) and choice == "1":
+            output.write("→ run 'pipx inject tars-agent anthropic' in this env\n")
+            output.write('→ or, in a venv: pip install "tars-agent[anthropic]"\n')
+        elif isinstance(exc, providers.ProviderAPIError) and choice == "2":
+            hints = {
+                401: "→ check your OpenRouter key at openrouter.ai/keys",
+                404: "→ model not found, try openrouter:anthropic/claude-3.5-sonnet",
+                429: "→ transient, retry in 30s",
+                405: "→ transient, retry in 30s",
+            }
+            if exc.status_code in hints:
+                output.write(hints[exc.status_code] + "\n")
+        output.write("No files changed.\n")
         for key, old in old_values.items():
             if old is None:
                 os.environ.pop(key, None)

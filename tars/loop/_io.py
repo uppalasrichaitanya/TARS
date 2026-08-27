@@ -12,7 +12,12 @@ from typing import TextIO
 
 from .._cli_helpers import is_tty as _helpers_is_tty
 from .._cli_helpers import use_color
-from ..providers.errors import ProviderError, ProviderNotConfiguredError
+from ..providers.errors import (
+    ProviderAPIError,
+    ProviderError,
+    ProviderNotConfiguredError,
+    ProviderNotInstalledError,
+)
 
 
 def is_tty(stream: TextIO) -> bool:
@@ -64,7 +69,13 @@ def provider_message(exc: ProviderError) -> str:
             "no Anthropic credentials - source ~/TARS/.env or set ANTHROPIC_AUTH_TOKEN"
         )
     text = " ".join(re.sub(r"<[^>]*>", " ", str(exc)).split())
+    if isinstance(exc, ProviderAPIError) and exc.status_code is not None:
+        prefix = f"HTTP {exc.status_code} from provider"
+        detail = text.split(":", 1)[1].strip() if ":" in text else text
+        return f"{prefix}\n{detail}"
+    if isinstance(exc, ProviderNotInstalledError):
+        return f"provider error\n{text}\ninstall hint: {exc.install_hint}"
     match = re.search(r"HTTP\s+\d{3}\s+from\s+provider", text, re.IGNORECASE)
     prefix = match.group(0) if match else "provider error"
     detail = text[match.end() :] if match else text
-    return f"{prefix}{detail[:200]}"
+    return f"{prefix}{detail}"

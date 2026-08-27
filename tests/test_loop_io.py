@@ -55,3 +55,35 @@ def test_diff_color_respects_tty_and_no_color(monkeypatch) -> None:
 def test_paint_wraps_text_only_when_enabled() -> None:
     assert paint("PASS", "32", enabled=True) == "\033[32mPASS\033[0m"
     assert paint("PASS", "32", enabled=False) == "PASS"
+
+
+def test_provider_api_message_keeps_full_status_and_error_detail() -> None:
+    from tars.loop._io import provider_message
+    from tars.providers.errors import ProviderAPIError
+
+    detail = "error.message=" + "model unavailable " * 30
+    text = provider_message(
+        ProviderAPIError(
+            f"HTTP 404 from provider: {detail}",
+            provider="openrouter",
+            status_code=404,
+        )
+    )
+    assert text.startswith("HTTP 404")
+    assert "\nerror.message=" in text
+    assert text.count("model unavailable") == 30
+
+
+def test_provider_not_installed_message_keeps_install_detail() -> None:
+    from tars.loop._io import provider_message
+    from tars.providers.errors import ProviderNotInstalledError
+
+    text = provider_message(
+        ProviderNotInstalledError(
+            "the anthropic SDK is not installed",
+            provider="agentrouter",
+            install_hint="pip install anthropic",
+        )
+    )
+    assert "the anthropic SDK is not installed" in text
+    assert "pip install anthropic" in text

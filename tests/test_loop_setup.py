@@ -110,6 +110,79 @@ def test_validation_failure_writes_nothing_and_hides_secret(
     assert not (tmp_path / ".config" / "tars" / "env").exists()
 
 
+def test_agentrouter_missing_sdk_shows_install_hint_and_writes_nothing(
+    tmp_path: Path,
+) -> None:
+    from tars.loop.setup import run_setup
+    from tars.providers.errors import ProviderNotInstalledError
+
+    answers = iter(["1", "", ""])
+    out = StringIO()
+
+    def fail(_model: str) -> None:
+        raise ProviderNotInstalledError(
+            "the anthropic SDK is not installed",
+            provider="agentrouter",
+            install_hint="pip install anthropic",
+        )
+
+    assert (
+        run_setup(
+            input_fn=lambda _prompt: next(answers),
+            secret_fn=lambda _prompt: "hidden-key",
+            output=out,
+            home=tmp_path,
+            cwd=tmp_path,
+            validate=fail,
+        )
+        == 3
+    )
+    assert "pipx inject tars-agent anthropic" in out.getvalue()
+    assert 'pip install "tars-agent[anthropic]"' in out.getvalue()
+    assert not (tmp_path / ".config" / "tars" / "env").exists()
+
+
+def test_openrouter_validation_errors_are_verbose_and_actionable(
+    tmp_path: Path,
+) -> None:
+    from tars.loop.setup import run_setup
+    from tars.providers.errors import ProviderAPIError
+
+    for status, hint in (
+        (401, "check your OpenRouter key at openrouter.ai/keys"),
+        (404, "model not found, try openrouter:anthropic/claude-3.5-sonnet"),
+        (429, "transient, retry in 30s"),
+    ):
+        answers = iter(["2", ""])
+        out = StringIO()
+
+        def fail(_model: str, status: int = status) -> None:
+            raise ProviderAPIError(
+                f"HTTP {status} from provider: error.message={status} details",
+                provider="openrouter",
+                status_code=status,
+            )
+
+        def answer(_prompt: str, answers=answers) -> str:
+            return next(answers)
+
+        assert (
+            run_setup(
+                input_fn=answer,
+                secret_fn=lambda _prompt: "hidden-key",
+                output=out,
+                home=tmp_path,
+                cwd=tmp_path,
+                validate=fail,
+            )
+            == 3
+        )
+        text = out.getvalue()
+        assert f"HTTP {status}" in text and "error.message" in text
+        assert hint in text
+        assert not (tmp_path / ".config" / "tars" / "env").exists()
+
+
 def test_setup_parser_and_version_route_smokes() -> None:
     from tars.loop.cli import build_parser, main
 
