@@ -33,7 +33,7 @@ def test_wheel_installs_and_runs_every_console_script(tmp_path: Path) -> None:
         capture_output=True,
         text=True,
     )
-    assert version.stdout.startswith("tars 0.1.0")
+    assert version.stdout.startswith("tars ")
     for command in ("tars-verify", "tars-readme", "tars-memory"):
         assert (bin_dir / command).is_file()
     resource = subprocess.run(

@@ -30,8 +30,7 @@ Get TARS running in 60 seconds:
 ```console
 pipx install tars-agent
 # or: pip install tars-agent
-export ANTHROPIC_AUTH_TOKEN=sk-...      # or OPENROUTER_API_KEY / TOKENROUTER_API_KEY
-export ANTHROPIC_BASE_URL=https://agentrouter.org   # if using AgentRouter
+tars setup
 tars
 ```
 
@@ -39,15 +38,16 @@ Inside the REPL, just type what you want — bare prompts run the full
 `ORIENT → CLASSIFY → PLAN → ACT → VERIFY → REFLECT → REPORT` loop:
 
 ```console
-tars> Fix the failing test in tests/test_login.py
-tars> Add dark mode to src/App.tsx and verify with tests
-tars> Explain how tars/memory scores candidates
+◐ tars › Fix the failing test in tests/test_login.py
+◐ tars › Add dark mode to src/App.tsx and verify with tests
+◐ tars › Explain how tars/memory scores candidates
 ```
 
 Slash commands force a single phase:
 
 | Command | What it does |
 |---|---|
+| `tars setup` | Configure and live-validate provider credentials |
 | `/run <task>` | Full loop for one task |
 | `/route <task>` | Show tier/blast/reversibility without acting |
 | `/verify` | Run the repo's gate locally (`tars-verify`) |

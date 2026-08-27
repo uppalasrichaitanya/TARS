@@ -25,6 +25,7 @@ from .engine import Engine
 from .repl import EngineRunner, Repl, _verdict, write_report
 from .session import Session
 from .session_store import SessionStore
+from .setup import load_env, run_setup
 from .types import RunPromptSpec, WebTarget
 
 EXIT_OK = 0
@@ -64,6 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
     route = subs.add_parser("route", help="classify one task without acting")
     route.add_argument("task")
     route.add_argument("--root", default=".", metavar="PATH")
+    subs.add_parser("setup", help="configure and validate provider credentials")
     return parser
 
 
@@ -75,6 +77,7 @@ def main(
     stderr: TextIO | None = None,
     engine: EngineRunner | None = None,
     classify: Callable[[str], Classification] = router.classify,
+    setup_runner: Callable[..., int] = run_setup,
 ) -> int:
     out = stdout if stdout is not None else sys.stdout
     err = stderr if stderr is not None else sys.stderr
@@ -85,6 +88,11 @@ def main(
         return EXIT_USAGE
     except SystemExit as exc:
         return int(exc.code or 0)
+
+    load_env()
+
+    if args.command == "setup":
+        return setup_runner(output=out)
 
     if args.command is None:
         home = Path(os.environ.get("TARS_HOME", Path.home() / ".tars"))
@@ -135,7 +143,9 @@ def main(
             output=out,
         )
     except ProviderError as exc:
-        err.write(provider_message(exc) + "\n")
+        err.write(
+            provider_message(exc) + "\n→ run 'tars setup' to configure a provider\n"
+        )
         return EXIT_PROVIDER
     write_report(report, out)
     return EXIT_FAILED if report.verification_passed is False else EXIT_OK

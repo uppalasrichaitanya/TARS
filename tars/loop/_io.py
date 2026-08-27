@@ -30,6 +30,21 @@ def paint(text: str, code: str, *, enabled: bool) -> str:
     return f"\033[{code}m{text}\033[0m" if enabled else text
 
 
+def rich_text(text: str, style: str, *, enabled: bool) -> str:
+    """Render optional Rich markup without making Rich a core dependency."""
+    if not enabled:
+        return text
+    try:
+        from rich.console import Console
+        from rich.text import Text
+    except ImportError:
+        return text
+    console = Console(color_system="auto", force_terminal=True, width=120)
+    with console.capture() as capture:
+        console.print(Text(text, style=style), end="")
+    return capture.get()
+
+
 def color_diff(diff: str, stream: TextIO) -> str:
     """Color unified additions/removals only when output is a TTY."""
     enabled = color_enabled(stream)

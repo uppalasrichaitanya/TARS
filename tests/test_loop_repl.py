@@ -121,7 +121,7 @@ def test_interactive_repl_uses_input_so_readline_completion_can_run(
     repl = Repl(Session(root=tmp_path), stdin=sys.stdin, stdout=sys.stdout)
 
     assert repl.run() == 0
-    assert prompts and "tars>" in prompts[0]
+    assert prompts and "◐ tars ›" in prompts[0]
 
 
 def _git(root: Path, *args: str) -> str:

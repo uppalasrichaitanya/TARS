@@ -63,6 +63,7 @@ def test_cli_reports_unconfigured_provider_without_traceback(tmp_path: Path) -> 
     )
     assert code == EXIT_PROVIDER
     assert "no Anthropic credentials" in err.getvalue()
+    assert "tars setup" in err.getvalue()
     assert "Traceback" not in err.getvalue()
 
 
@@ -102,4 +103,5 @@ def test_cli_truncates_html_provider_error_body(tmp_path: Path) -> None:
             )
         )
         + "\n"
+        + "→ run 'tars setup' to configure a provider\n"
     )

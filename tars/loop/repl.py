@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import builtins
 import json
+import os
 import sys
 from collections.abc import Callable
 from difflib import get_close_matches
@@ -14,10 +15,11 @@ from .. import memory, router, verification
 from ..memory.store import MemoryStore
 from ..providers.errors import ProviderError
 from ..router import Classification
-from ._io import color_enabled, is_tty, paint, provider_message
+from ._io import color_enabled, is_tty, paint, provider_message, rich_text
 from .engine import Engine
 from .session import Session
 from .session_store import SessionStore
+from .setup import BANNER
 from .types import RunPromptSpec, RunReport
 
 
@@ -74,10 +76,12 @@ class Repl:
             _install_completion(self.session.root)
 
     def run(self) -> int:
+        if self._uses_readline_input():
+            self._welcome()
         while True:
             try:
                 if self._uses_readline_input():
-                    line = builtins.input(paint("tars> ", "32", enabled=self._color))
+                    line = builtins.input(self._interactive_prompt())
                     line += "\n"
                 else:
                     if self._prompt:
@@ -142,7 +146,9 @@ class Repl:
                 )
                 self._write(f"unknown command: {command}{hint}\n")
         except ProviderError as exc:
-            self._write(provider_message(exc) + "\n")
+            self._write(
+                provider_message(exc) + "\n→ run 'tars setup' to configure a provider\n"
+            )
         except KeyboardInterrupt:
             if not self.session.interrupted:
                 self.session.interrupted = True
@@ -264,6 +270,49 @@ class Repl:
             "workflow: /run <task>  /route <task>  /verify  /memory [approve <id>]\n"
             "info: /status  /resume [ID]  /undo  /clear  /pillars  /help  /exit\n"
         )
+
+    def _welcome(self) -> None:
+        self.stdout.write(
+            rich_text(BANNER.splitlines()[0] + "\n", "bold green", enabled=self._color)
+        )
+        self.stdout.write(
+            rich_text(
+                "ORIENT → CLASSIFY → PLAN → ACT → VERIFY → REFLECT → REPORT\n",
+                "dim",
+                enabled=self._color,
+            )
+        )
+        self.stdout.write(
+            'Try "Fix a bug" or "/help" — run "tars setup" to configure keys\n'
+        )
+        if not any(
+            os.environ.get(key)
+            for key in (
+                "AGENTROUTER_API_KEY",
+                "ANTHROPIC_AUTH_TOKEN",
+                "ANTHROPIC_API_KEY",
+                "OPENROUTER_API_KEY",
+                "TOKENROUTER_API_KEY",
+            )
+        ):
+            self.stdout.write(
+                "no provider credentials found\n→ run 'tars setup' to configure a provider\n"
+            )
+
+    def _interactive_prompt(self) -> str:
+        tier = (
+            self.session.last_classification.tier
+            if self.session.last_classification
+            else 1
+        )
+        raw_hint = f"tier {tier} · {self.session.model}  "
+        hint = rich_text(raw_hint, "dim", enabled=self._color)
+        if hint == raw_hint:
+            hint = ""
+        prompt = rich_text("◐ tars › ", "bold green", enabled=self._color)
+        if prompt == "◐ tars › ":
+            prompt = paint(prompt, "32", enabled=self._color)
+        return hint + prompt
 
     def _write(self, text: str) -> None:
         self.stdout.write(paint(text, "32", enabled=self._color))
