@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 
 from tars.loop.session import Session
-from tars.loop.types import RunReport
+from tars.loop.types import RunPromptSpec, RunReport
 from tars.memory import Candidate, MemoryEntry, ReflectionReport
 from tars.router import Classification
 from tars.verification import GateReport
@@ -87,11 +87,111 @@ def test_bare_prompt_runs_the_full_workflow(tmp_path: Path) -> None:
 
     Repl(
         Session(root=tmp_path),
-        stdin=StringIO("Fix bug in foo.py\n/exit\n"),
+        stdin=StringIO("/agent Fix bug in foo.py\n/exit\n"),
         stdout=StringIO(),
         engine=FakeEngine(),
     ).run()
     assert seen == ["Fix bug in foo.py"]
+
+
+def test_chat_and_plan_commands_use_the_selected_modes(tmp_path: Path) -> None:
+    from tars.loop.modes import ModeService
+    from tars.loop.repl import Repl
+    from tars.providers import LLMResponse, ToolDef, Usage
+
+    calls: list[tuple[object, tuple[ToolDef, ...], str]] = []
+
+    def provider(messages, tools, model):
+        calls.append((messages, tools, model))
+        return LLMResponse("answer", (), model, "fake", "end_turn", Usage())
+
+    session = Session(root=tmp_path, model="fake")
+    out = StringIO()
+    Repl(
+        session,
+        stdin=StringIO("/chat hello\n/mode plan\n/plan inspect\n/status\n/exit\n"),
+        stdout=out,
+        modes=ModeService(provider),
+    ).run()
+    assert session.mode.value == "plan"
+    assert session.pending_plan is not None
+    assert len(calls) == 2
+    assert calls[0][1] == ()
+    assert "read_file" in {tool.name for tool in calls[1][1]}
+    assert "Plan ready" in out.getvalue()
+
+
+def test_execute_passes_reviewed_plan_to_agent(tmp_path: Path) -> None:
+    from tars.loop.repl import Repl
+
+    seen: list[RunPromptSpec] = []
+
+    class FakeEngine:
+        def run(self, spec, session, *, output):
+            seen.append(spec)
+            return RunReport(task=spec.task, verification_passed=True)
+
+    session = Session(root=tmp_path, model="fake")
+    session.save_plan("fix it", "1. Read a.py")
+    out = StringIO()
+    Repl(
+        session,
+        stdin=StringIO("/execute\n/exit\n"),
+        stdout=out,
+        engine=FakeEngine(),
+        confirm_plan=lambda _plan: True,
+    ).run()
+    assert seen and seen[0].task == "fix it"
+    assert seen[0].plan_context == "1. Read a.py"
+    assert session.pending_plan is None
+
+
+def test_execute_requires_confirmation_and_keeps_declined_plan(tmp_path: Path) -> None:
+    from tars.loop.repl import Repl
+
+    class FakeEngine:
+        def run(self, spec, session, *, output):
+            raise AssertionError("a declined plan must not enter Agent mode")
+
+    session = Session(root=tmp_path, model="fake")
+    session.save_plan("fix it", "1. Read a.py")
+    out = StringIO()
+    Repl(
+        session,
+        stdin=StringIO("/execute\n/exit\n"),
+        stdout=out,
+        engine=FakeEngine(),
+        confirm_plan=lambda _plan: False,
+    ).run()
+    assert session.pending_plan is not None
+    assert session.mode.value == "chat"
+    assert "execution cancelled; plan kept" in out.getvalue()
+
+
+def test_execute_without_a_pending_plan_explains_how_to_make_one(
+    tmp_path: Path,
+) -> None:
+    from tars.loop.repl import Repl
+
+    out = StringIO()
+    Repl(
+        Session(root=tmp_path),
+        stdin=StringIO("/execute\n/exit\n"),
+        stdout=out,
+    ).run()
+    assert "use /plan <task> first" in out.getvalue()
+
+
+def test_invalid_mode_lists_the_supported_modes(tmp_path: Path) -> None:
+    from tars.loop.repl import Repl
+
+    out = StringIO()
+    Repl(
+        Session(root=tmp_path),
+        stdin=StringIO("/mode fast\n/exit\n"),
+        stdout=out,
+    ).run()
+    assert "usage: /mode chat|plan|agent" in out.getvalue()
 
 
 def test_completion_offers_slash_commands_and_paths(tmp_path: Path) -> None:

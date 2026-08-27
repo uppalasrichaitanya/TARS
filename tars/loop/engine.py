@@ -230,6 +230,15 @@ class Engine:
             context_name, context_message = project_context
             orientation = (*orientation, context_message)
             _write(stream, f"ORIENT: project context {context_name}\n")
+        if spec.plan_context:
+            orientation = (
+                *orientation,
+                Message.system(
+                    "The user reviewed and approved this implementation plan. "
+                    "Treat it as authoritative context while still following every "
+                    f"TARS phase:\n\n{spec.plan_context}"
+                ),
+            )
 
         def generate(
             model: str, *, act: bool = False
@@ -279,7 +288,7 @@ class Engine:
             if stream is not None:
                 stream.write(color_diff(preview, stream))
                 stream.flush()
-            return False
+            return spec.confirm(preview) if spec.confirm is not None else False
 
         session.ensure_checkpoint()
         toolbox = self.toolbox(

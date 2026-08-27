@@ -28,6 +28,7 @@ from typing import Any
 from ..providers import Message
 from ..router import Classification
 from .session_store import SessionStore
+from .types import InteractionMode, PendingPlan
 
 #: The flagship. The loop's router is what steps down to something cheaper, so
 #: the default here is deliberately the capable model, not the frugal one.
@@ -83,6 +84,8 @@ class Session:
     tier_models: dict[str, str | None] = field(default_factory=dict)
     session_id: str = field(default_factory=new_session_id)
     store: SessionStore | None = field(default=None, repr=False, compare=False)
+    mode: InteractionMode = InteractionMode.CHAT
+    pending_plan: PendingPlan | None = None
 
     _messages: list[Message] = field(default_factory=list, repr=False)
     #: What CLASSIFY last decided, so /run can report what /route already showed.
@@ -113,6 +116,7 @@ class Session:
                     "root": str(self.root.resolve()),
                     "model": self.model,
                     "auto_confirm": self.auto_confirm,
+                    "mode": self.mode.value,
                 },
             )
             self.record_event("config", {"tier_models": self.tier_models})
@@ -143,6 +147,7 @@ class Session:
             root=Path(str(started.get("root", "."))),
             model=str(started.get("model", default_model())),
             auto_confirm=bool(started.get("auto_confirm", False)),
+            mode=InteractionMode(str(started.get("mode", InteractionMode.CHAT.value))),
             tier_models={"0": None},
             session_id=session_id,
             store=store,
@@ -166,10 +171,20 @@ class Session:
                     session.last_classification = None
                     session.last_verdict = None
                     session.interrupted = False
+                    session.pending_plan = None
                 if "model" in event:
                     session.model = str(event["model"])
                 if "auto_confirm" in event:
                     session.auto_confirm = bool(event["auto_confirm"])
+                if "mode" in event:
+                    session.mode = InteractionMode(str(event["mode"]))
+                if "pending_plan" in event:
+                    raw_plan = event["pending_plan"]
+                    session.pending_plan = (
+                        PendingPlan(str(raw_plan["task"]), str(raw_plan["text"]))
+                        if isinstance(raw_plan, dict)
+                        else None
+                    )
                 if "tier_models" in event and isinstance(event["tier_models"], dict):
                     saved = event["tier_models"]
                     session.tier_models = {
@@ -282,7 +297,24 @@ class Session:
         self.last_classification = None
         self.last_verdict = None
         self.interrupted = False
+        self.pending_plan = None
         self.record_event("config", {"clear_transcript": True})
+
+    def set_mode(self, mode: InteractionMode | str) -> None:
+        self.mode = InteractionMode(mode)
+        self.record_event("config", {"mode": self.mode.value})
+
+    def save_plan(self, task: str, text: str) -> PendingPlan:
+        self.pending_plan = PendingPlan(task, text)
+        self.record_event(
+            "config",
+            {"pending_plan": {"task": task, "text": text}},
+        )
+        return self.pending_plan
+
+    def clear_plan(self) -> None:
+        self.pending_plan = None
+        self.record_event("config", {"pending_plan": None})
 
     def snapshot(self) -> dict[str, Any]:
         """What `/status` reports, as data rather than as printed text."""
@@ -300,6 +332,8 @@ class Session:
             ),
             "last_verdict": self.last_verdict,
             "interrupted": self.interrupted,
+            "mode": self.mode.value,
+            "pending_plan": self.pending_plan is not None,
         }
 
 

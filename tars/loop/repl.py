@@ -17,10 +17,11 @@ from ..providers.errors import ProviderError
 from ..router import Classification
 from ._io import color_enabled, is_tty, paint, provider_message, rich_text
 from .engine import Engine
+from .modes import ModeService
 from .session import Session
 from .session_store import SessionStore
 from .setup import BANNER
-from .types import RunPromptSpec, RunReport
+from .types import InteractionMode, RunPromptSpec, RunReport
 
 
 class EngineRunner(Protocol):
@@ -60,6 +61,8 @@ class Repl:
         propose: Callable[..., memory.ReflectionReport] = memory.propose,
         store: MemoryApprover | None = None,
         session_store: SessionStore | None = None,
+        modes: ModeService | None = None,
+        confirm_plan: Callable[[str], bool] | None = None,
     ) -> None:
         self.session = session or Session()
         self.session_store = session_store or self.session.store
@@ -70,10 +73,20 @@ class Repl:
         self.verify = verify
         self.propose = propose
         self.store = store or MemoryStore(root=self.session.root)
+        self.modes = modes or ModeService()
+        self.confirm_plan = confirm_plan
         self._color = color_enabled(self.stdout)
         self._prompt = is_tty(self.stdout)
+        self._tui = None
         if self._prompt and is_tty(cast(TextIO, self.stdin)):  # type: ignore[arg-type]
             _install_completion(self.session.root)
+            try:
+                from . import tui
+
+                if tui.available():
+                    self._tui = tui.Composer(self.session, _SLASH_COMMANDS)
+            except (ImportError, RuntimeError):
+                self._tui = None
 
     def run(self) -> int:
         if self._uses_readline_input():
@@ -81,10 +94,10 @@ class Repl:
         while True:
             try:
                 if self._uses_readline_input():
-                    line = builtins.input(self._interactive_prompt())
+                    line = self._read_interactive()
                     line += "\n"
                 else:
-                    if self._prompt:
+                    if self._prompt and is_tty(cast(TextIO, self.stdin)):
                         self._write("tars> ")
                     line = self.stdin.readline()
             except EOFError:
@@ -106,17 +119,54 @@ class Repl:
             and is_tty(cast(TextIO, self.stdin))  # type: ignore[arg-type]
         )
 
+    def _read_interactive(self) -> str:
+        # The actual stream check prevents tests that monkeypatch ``is_tty``
+        # from entering prompt-toolkit's terminal event loop.
+        if (
+            bool(getattr(sys.stdin, "isatty", lambda: False)())
+            and self._tui is not None
+        ):
+            return self._tui.read()
+        return builtins.input(self._interactive_prompt())
+
     def _dispatch(self, line: str) -> bool:
         if not line:
             return False
         if not line.startswith("/"):
-            self._run(line)
+            if self.session.mode is InteractionMode.CHAT:
+                self._chat(line)
+            elif self.session.mode is InteractionMode.PLAN:
+                self._plan(line)
+            else:
+                self._run(line)
             return False
         command, _, argument = line.partition(" ")
         argument = argument.strip()
         try:
             if command in ("/exit", "/quit"):
                 return True
+            if command == "/mode":
+                self._mode(argument)
+                return False
+            elif command == "/chat":
+                self.session.set_mode(InteractionMode.CHAT)
+                self._chat(argument)
+                return False
+            elif command == "/plan":
+                self.session.set_mode(InteractionMode.PLAN)
+                self._plan(argument)
+                return False
+            elif command == "/agent":
+                self.session.set_mode(InteractionMode.AGENT)
+                self._run(argument)
+                return False
+            elif command == "/execute":
+                self._execute()
+                return False
+            elif command == "/cancel":
+                self.session.clear_plan()
+                self._write("cancelled\n")
+                return False
             if command == "/clear":
                 self.session.clear()
                 self._write("cleared\n")
@@ -163,11 +213,78 @@ class Repl:
             self._write("usage: /run <task>\n")
             return
         report = self.engine.run(
-            RunPromptSpec(task, auto_confirm=self.session.auto_confirm),
+            RunPromptSpec(
+                task,
+                auto_confirm=self.session.auto_confirm,
+                confirm=self._confirm_action,
+            ),
             self.session,
             output=self.stdout,
         )
         write_report(report, self.stdout)
+
+    def _chat(self, text: str) -> None:
+        if not text:
+            self._write("usage: /chat <message>\n")
+            return
+        self.modes.chat(self.session, text, output=self.stdout)
+
+    def _plan(self, task: str) -> None:
+        if not task:
+            self._write("usage: /plan <task>\n")
+            return
+        self.modes.plan(self.session, task, output=self.stdout)
+        self._write("Plan ready — use /execute to run this plan\n")
+
+    def _mode(self, value: str) -> None:
+        if not value:
+            self._write(f"mode: {self.session.mode.value}\n")
+            return
+        try:
+            self.session.set_mode(value)
+        except ValueError:
+            self._write("usage: /mode chat|plan|agent\n")
+            return
+        self._write(f"mode: {self.session.mode.value}\n")
+
+    def _execute(self) -> None:
+        plan = self.session.pending_plan
+        if plan is None:
+            self._write("no reviewed plan; use /plan <task> first\n")
+            return
+        if self.confirm_plan is not None:
+            approved = self.confirm_plan(plan.text)
+        elif self._uses_readline_input():
+            answer = builtins.input("Execute this plan? [y/N] ")
+            approved = answer.strip().lower() in {"y", "yes"}
+        else:
+            approved = False
+        if not approved:
+            self._write("execution cancelled; plan kept\n")
+            return
+        self.session.set_mode(InteractionMode.AGENT)
+        self.session.clear_plan()
+        report = self.engine.run(
+            RunPromptSpec(
+                plan.task,
+                auto_confirm=self.session.auto_confirm,
+                plan_context=plan.text,
+                confirm=self._confirm_action,
+            ),
+            self.session,
+            output=self.stdout,
+        )
+        write_report(report, self.stdout)
+
+    def _confirm_action(self, _preview: str) -> bool:
+        if not self._uses_readline_input():
+            return False
+        answer = builtins.input("Approve? [y] once  [a] always this session  [N] ")
+        if answer.strip().lower() == "a":
+            self.session.auto_confirm = True
+            self.session.record_event("config", {"auto_confirm": True})
+            return True
+        return answer.strip().lower() in {"y", "yes"}
 
     def _route(self, task: str) -> None:
         if not task:
@@ -254,6 +371,8 @@ class Repl:
             self._write("error: session belongs to a different root\n")
             return
         self.session = loaded
+        if self._tui is not None:
+            self._tui.set_session(loaded)
         self.store = self.store or MemoryStore(root=self.session.root)
         state = self.session.snapshot()
         self._write(
@@ -267,6 +386,7 @@ class Repl:
 
     def _help(self) -> None:
         self._write(
+            "modes: /mode chat|plan|agent  /chat <message>  /plan <task>  /execute\n"
             "workflow: /run <task>  /route <task>  /verify  /memory [approve <id>]\n"
             "info: /status  /resume [ID]  /undo  /clear  /pillars  /help  /exit\n"
         )
@@ -341,6 +461,12 @@ def _install_completion(root: Path) -> None:
 
 _SLASH_COMMANDS = (
     "/run",
+    "/mode",
+    "/chat",
+    "/plan",
+    "/agent",
+    "/execute",
+    "/cancel",
     "/route",
     "/verify",
     "/memory",

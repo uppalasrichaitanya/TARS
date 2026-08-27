@@ -9,6 +9,7 @@ never touches a provider-specific tool block.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
@@ -32,6 +33,22 @@ class Phase(StrEnum):
     VERIFY = "verify"
     REFLECT = "reflect"
     REPORT = "report"
+
+
+class InteractionMode(StrEnum):
+    """How a bare interactive prompt should be handled."""
+
+    CHAT = "chat"
+    PLAN = "plan"
+    AGENT = "agent"
+
+
+@dataclass(frozen=True)
+class PendingPlan:
+    """A reviewed read-only plan waiting for explicit execution."""
+
+    task: str
+    text: str
 
 
 @dataclass(frozen=True)
@@ -62,6 +79,10 @@ class RunPromptSpec:
     max_turns: int = 12
     #: Optional web surface to verify after the repo gate.
     web: WebTarget | None = None
+    plan_context: str | None = None
+    confirm: Callable[[str], bool] | None = field(
+        default=None, repr=False, compare=False
+    )
 
     def __post_init__(self) -> None:
         if not self.task or not self.task.strip():

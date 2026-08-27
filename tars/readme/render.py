@@ -174,20 +174,25 @@ tars setup
 tars
 ```
 
-Inside the REPL, just type what you want — bare prompts run the full
-`ORIENT → CLASSIFY → PLAN → ACT → VERIFY → REFLECT → REPORT` loop:
+Inside the REPL, new sessions start in Chat mode. Tab cycles Chat → Plan →
+Agent; `/mode chat|plan|agent` switches explicitly. Bare prompts follow the
+selected mode:
 
 ```console
-◐ tars › Fix the failing test in tests/test_login.py
-◐ tars › Add dark mode to src/App.tsx and verify with tests
-◐ tars › Explain how tars/memory scores candidates
+◐ chat › Explain how tars/memory scores candidates
+◐ plan › Add dark mode to src/App.tsx and verify with tests
+◐ agent › Fix the failing test in tests/test_login.py
 ```
 
-Slash commands force a single phase:
+Commands:
 
 | Command | What it does |
 |---|---|
 | `tars setup` | Configure and live-validate provider credentials |
+| `/mode chat\\|plan\\|agent` | Switch the current interaction mode |
+| `/chat <message>` | Have a direct conversation without repository tools |
+| `/plan <task>` | Inspect the repository and save a read-only implementation plan |
+| `/execute` | Explicitly approve and execute the reviewed Plan |
 | `/run <task>` | Full loop for one task |
 | `/route <task>` | Show tier/blast/reversibility without acting |
 | `/verify` | Run the repo's gate locally (`tars-verify`) |
@@ -196,6 +201,14 @@ Slash commands force a single phase:
 | `/undo` | Restore the pre-ACT Git checkpoint |
 | `/resume [ID]` | Resume a prior session (survives Ctrl-C) |
 | `/pillars` | Show the seven-phase loop |
+
+Plan mode never mutates files. Agent mode is the full disciplined workflow and
+keeps ACT previews behind confirmation. For command history, multiline input,
+and slash completion, install the optional composer:
+
+```console
+pipx inject tars-agent prompt-toolkit
+```
 
 One-shot (no REPL):
 

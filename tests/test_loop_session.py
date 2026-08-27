@@ -184,3 +184,42 @@ def test_tier_model_map_round_trips_through_config_event(tmp_path: Path) -> None
     )
     loaded = Session.load(store, "saved")
     assert loaded.tier_models == session.tier_models
+
+
+def test_mode_and_pending_plan_round_trip_through_session_store(tmp_path: Path) -> None:
+    from tars.loop.session_store import SessionStore
+    from tars.loop.types import InteractionMode
+
+    store = SessionStore(tmp_path / "sessions")
+    session = Session(root=tmp_path, session_id="modes", store=store)
+    session.set_mode(InteractionMode.PLAN)
+    session.save_plan("fix it", "1. Inspect the file.\n2. Run tests.")
+
+    loaded = Session.load(store, "modes")
+    assert loaded.mode is InteractionMode.PLAN
+    assert loaded.pending_plan is not None
+    assert loaded.pending_plan.task == "fix it"
+
+
+def test_clear_removes_a_pending_plan_and_persists_that_fact(tmp_path: Path) -> None:
+    from tars.loop.session_store import SessionStore
+
+    store = SessionStore(tmp_path / "sessions")
+    session = Session(root=tmp_path, session_id="clear-mode", store=store)
+    session.save_plan("task", "plan")
+    session.clear()
+    loaded = Session.load(store, "clear-mode")
+    assert loaded.pending_plan is None
+
+
+def test_loading_a_session_from_before_modes_defaults_to_chat(tmp_path: Path) -> None:
+    from tars.loop.session_store import SessionStore
+    from tars.loop.types import InteractionMode
+
+    store = SessionStore(tmp_path / "sessions")
+    store.append(
+        "legacy",
+        "session_started",
+        {"root": str(tmp_path), "model": "fake", "auto_confirm": False},
+    )
+    assert Session.load(store, "legacy").mode is InteractionMode.CHAT

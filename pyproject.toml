@@ -23,6 +23,7 @@ openai = ["openai>=1.40"]
 providers = ["anthropic>=0.40", "openai>=1.40"]
 browser = ["playwright>=1.40"]
 rich = ["rich>=13"]
+tui = ["prompt-toolkit>=3.0"]
 dev = ["anthropic>=0.40", "openai>=1.40", "pytest>=8"]
 
 [project.scripts]
@@ -48,7 +49,7 @@ include = ["tars"]
 # tree — present in development, missing from the wheel.
 [tool.setuptools.package-data]
 "tars.router" = ["data/*.json"]
-"tars" = ["loop/setup.py"]
+"tars" = ["loop/setup.py", "loop/modes.py", "loop/tui.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

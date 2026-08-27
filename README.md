@@ -34,20 +34,25 @@ tars setup
 tars
 ```
 
-Inside the REPL, just type what you want — bare prompts run the full
-`ORIENT → CLASSIFY → PLAN → ACT → VERIFY → REFLECT → REPORT` loop:
+Inside the REPL, new sessions start in Chat mode. Tab cycles Chat → Plan →
+Agent; `/mode chat|plan|agent` switches explicitly. Bare prompts follow the
+selected mode:
 
 ```console
-◐ tars › Fix the failing test in tests/test_login.py
-◐ tars › Add dark mode to src/App.tsx and verify with tests
-◐ tars › Explain how tars/memory scores candidates
+◐ chat › Explain how tars/memory scores candidates
+◐ plan › Add dark mode to src/App.tsx and verify with tests
+◐ agent › Fix the failing test in tests/test_login.py
 ```
 
-Slash commands force a single phase:
+Commands:
 
 | Command | What it does |
 |---|---|
 | `tars setup` | Configure and live-validate provider credentials |
+| `/mode chat\|plan\|agent` | Switch the current interaction mode |
+| `/chat <message>` | Have a direct conversation without repository tools |
+| `/plan <task>` | Inspect the repository and save a read-only implementation plan |
+| `/execute` | Explicitly approve and execute the reviewed Plan |
 | `/run <task>` | Full loop for one task |
 | `/route <task>` | Show tier/blast/reversibility without acting |
 | `/verify` | Run the repo's gate locally (`tars-verify`) |
@@ -56,6 +61,14 @@ Slash commands force a single phase:
 | `/undo` | Restore the pre-ACT Git checkpoint |
 | `/resume [ID]` | Resume a prior session (survives Ctrl-C) |
 | `/pillars` | Show the seven-phase loop |
+
+Plan mode never mutates files. Agent mode is the full disciplined workflow and
+keeps ACT previews behind confirmation. For command history, multiline input,
+and slash completion, install the optional composer:
+
+```console
+pipx inject tars-agent prompt-toolkit
+```
 
 One-shot (no REPL):
 
@@ -228,18 +241,18 @@ reflect_on("run/session.jsonl").nothing_worth_remembering
     - `tars/loop/_io.py` — Small output helpers for the REPL.
     - `tars/loop/cli.py` — `tars` — persistent REPL and one-shot loop commands.
     - `tars/loop/engine.py` — The seven-phase loop, composed from TARS's tested phase modules.
+    - `tars/loop/modes.py` — Chat and read-only Plan interactions, separate from the Agent engine.
     - `tars/loop/repl.py` — The persistent slash-command interface over one live :class:`Session`.
     - `tars/loop/session.py` — What persists between commands.
     - `tars/loop/session_store.py` — Durable event log for REPL sessions.
     - `tars/loop/tools.py` — Model-facing ACT tools.
+    - `tars/loop/tui.py` — Optional prompt-toolkit composer for the inline TARS workspace.
     - `tars/loop/types.py` — The loop's own vocabulary.
   - `tars/memory/__init__.py` — TARS memory writer — PHASE 6 (REFLECT), isolated. (`python -m tars.memory`)
     - `tars/memory/cli.py` — `tars-memory` — the REFLECT phase as a command.
     - `tars/memory/domains.py` — Which partition does a fact belong to, and what said so.
     - `tars/memory/propose.py` — The REFLECT pass: read a transcript, propose what is worth remembering.
-    - `tars/memory/signals.py` — Detectors for the sentence in core directive 4.
-    - `tars/memory/similarity.py` — Small lexical similarity for memory retrieval without an embedding service.
-- …and 32 more modules
+- …and 34 more modules
 
 Tests live in `tests/`.
 
