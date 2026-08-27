@@ -6,11 +6,13 @@ build-backend = "setuptools.build_meta"
 name = "tars-agent"
 version = "0.1.0"
 description = "TARS — a disciplined, multi-session coding agent loop"
+readme = {file = "README.md", content-type = "text/markdown"}
 requires-python = ">=3.10"
 dependencies = []
 license = {file = "LICENSE"}
+authors = [{name = "TARS contributors", email = "uppalasrichaitanya2007@gmail.com"}]
 classifiers = ["License :: OSI Approved :: MIT License"]
-urls = {Repository = "https://github.com/chaitanya/tars", Issues = "https://github.com/chaitanya/tars/issues"}
+urls = {Repository = "https://github.com/uppalasrichaitanya/TARS", Issues = "https://github.com/uppalasrichaitanya/TARS/issues"}
 
 [project.optional-dependencies]
 # Direct SDKs are first-class but optional: the adapter layer imports them
