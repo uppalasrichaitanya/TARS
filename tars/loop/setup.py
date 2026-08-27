@@ -150,9 +150,10 @@ def run_setup(
         if validate:
             validate(model_to_validate)
         else:
-            providers.generate(
-                [providers.Message.system("ping")], [], model_to_validate
-            )
+            # A user turn is required by every supported provider.  A
+            # system-only probe is rejected by AgentRouter/OpenRouter before
+            # credentials are even evaluated.
+            providers.generate([providers.Message.user("ping")], [], model_to_validate)
     except providers.ProviderError as exc:
         from ._io import provider_message
 

@@ -5,4 +5,4 @@ from importlib.metadata import PackageNotFoundError, version
 try:
     __version__ = version("tars-agent")
 except PackageNotFoundError:
-    __version__ = "0.1.2"
+    __version__ = "0.1.3"

@@ -205,3 +205,27 @@ def test_setup_subcommand_dispatches_to_wizard() -> None:
     assert main(["setup"], stdout=out, setup_runner=setup_runner) == 0
     assert called == [out]
     assert out.getvalue() == "wizard ran\n"
+
+
+def test_live_validation_probe_uses_a_user_message(tmp_path: Path, monkeypatch) -> None:
+    from tars import providers
+    from tars.loop.setup import run_setup
+
+    answers = iter(["3", "1"])
+    seen: list[providers.Message] = []
+
+    def fake_generate(messages, tools, model):
+        seen.extend(messages)
+
+    monkeypatch.setattr(providers, "generate", fake_generate)
+    assert (
+        run_setup(
+            input_fn=lambda _prompt: next(answers),
+            secret_fn=lambda _prompt: "key",
+            output=StringIO(),
+            home=tmp_path,
+            cwd=tmp_path,
+        )
+        == 0
+    )
+    assert seen and seen[0].role == "user" and seen[0].content == "ping"
