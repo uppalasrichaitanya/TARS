@@ -12,6 +12,13 @@ Named for TARS - the robot from Interstellar - whose worth lies not in clevernes
 pip install -e ".[dev]"
 ```
 
+Or install the published package:
+
+```console
+pipx install tars-agent
+pip install tars-agent
+```
+
 Requires Python `>=3.10`.
 
 This project has no runtime dependencies.

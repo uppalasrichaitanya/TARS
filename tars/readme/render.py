@@ -119,6 +119,17 @@ def _install(facts: ProjectFacts) -> str:
     extra = _dev_extra(facts)
     target = f'".[{extra}]"' if extra else "."
     lines = ["## Install", "", "```console", f"pip install -e {target}", "```"]
+    # Once published, surface the user-facing path alongside the editable one.
+    if facts.name == "tars-agent":
+        lines += [
+            "",
+            "Or install the published package:",
+            "",
+            "```console",
+            "pipx install tars-agent",
+            "pip install tars-agent",
+            "```",
+        ]
     facts_line = _requirements_line(facts)
     if facts_line:
         lines += ["", facts_line]
