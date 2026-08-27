@@ -107,20 +107,21 @@ Three findings from this work that outlived the tasks that produced them:
 
 ---
 
-## 5. The `tars` REPL (`tars/loop/`) — COMPLETE and live-verified
+## 5. The `tars` REPL (`tars/loop/`) — COMPLETE and live-verified (v1 at `b3699ed`, hardened at `e3a0ea7`)
 
 Six good libraries, now one product. Built file-by-file TDD-first across
-commits `d99a961`…`fdc849a`, shipped as the `tars` command in `487455a`.
+commits `d99a961`…`fdc849a`, shipped as the `tars` command in `487455a`,
+then hardened through slices A-H (see §6, §9 and `V1.md`).
 
 | File | Contents | State |
 |---|---|---|
 | `types.py` | `Phase`, `RunPromptSpec`, `RunReport`, `ToolCall`, `ToolResult` | ✅ |
 | `session.py` | `Session` — root, model, transcript, last verdicts; env-aware default model | ✅ |
-| `_io.py` | raw-ANSI output: `NO_COLOR`, `isatty`, `\033[…m` | ✅ |
-| `tools.py` | `read_file` / `list_dir` / `apply_edit` / `run_command`; both mutating tools behind the confirm gate | ✅ |
-| `engine.py` | the seven phases + model→tool dispatch, retry via ACT's `RETRYABLE_REASONS` | ✅ |
-| `repl.py` | slash dispatch over one live `Session`, injected streams | ✅ |
-| `cli.py` | bare `tars` opens the REPL; `tars run`/`tars route` one-shots; exit codes 0/1/2 | ✅ |
+| `_io.py` | raw-ANSI output: `NO_COLOR`, `isatty`, `\033[…m`; TTY/`NO_COLOR`-aware diff color + wait lines | ✅ |
+| `tools.py` | `read_file` / `list_dir` / `apply_edit` / `run_command`; both mutating tools behind the confirm gate; `anchored` alias for safe replace path | ✅ |
+| `engine.py` | the seven phases + model→tool dispatch, retry via ACT's `RETRYABLE_REASONS`; harness directives on every `generate` | ✅ |
+| `repl.py` | slash dispatch + bare prompts over one live `Session`; injected streams preserved, interactive path uses `input()` + readline completion | ✅ |
+| `cli.py` | bare `tars` opens the REPL; `tars run`/`tars route` one-shots; exit codes 0/1/2; metadata-backed `--version` | ✅ |
 
 **Live proof (2026-08-26):** a temp repo whose `add()` subtracted was fixed
 by a real `/run` through AgentRouter — CLASSIFY printed its verdict, the
@@ -128,6 +129,16 @@ model requested an anchored edit which applied correctly, VERIFY honestly
 reported "no checks" rather than passing, REFLECT proposed two candidates
 without auto-committing them, REPORT rendered everything including
 uncertainties verbatim.
+
+**v1 proof (2026-08-27, `b3699ed` → `e3a0ea7`):** TARS edited a failing pytest
+fixture in a temp repo and its own VERIFY reported pass. The model first
+requested `{"kind": "anchored"}` (unknown at the time, returned as a tool
+error with no write), then recovered with a successful gated `apply_edit`
+before running commands. `e3a0ea7` makes `anchored` an explicit alias for the
+safe anchored-hunk replace path (dry-run, diff, confirm, unique-anchor) and
+fixes `repl.py` to use `input()` with explicit delimiters so `/ver<Tab>`
+expands to `/verify`. Full suite + `tars-verify PASS 4/4` + `tars-readme
+--check` all green; see `V1.md`.
 
 ### Every phase is a real call, nothing stubbed
 
@@ -144,7 +155,17 @@ uncertainties verbatim.
 The loop contributes only composition, model→tool dispatch, and the confirm gate.
 
 **Commands:** `/run <task>`, `/route <task>`, `/verify`, `/memory`,
-`/memory approve`, `/status`, `/pillars`, plus `/help` and `/exit`.
+`/memory approve`, `/memory correct <id> "<reason>"`, `/status`, `/pillars`, `/undo`, plus `/help` and `/exit`; bare prompts (e.g. `Fix bug`) run as a full workflow, not an error.
+
+**v1 slices A-H (all shipped at `b3699ed`, slice results in `V1.md`):**
+A untrusted `TARS.md`/`CLAUDE.md` context (capped, labeled, wrapper-tested);
+B pre-ACT detached Git checkpoint + path-scoped `/undo` (dirty-tree safe);
+C `KeyboardInterrupt` + JSONL `fsync` durability (live AgentRouter interrupt → `interrupted: true`);
+D harness directives on every generation + streaming + browser `check`/`uncheck`/`back`/`forward`/`reload` + incremental snapshots;
+E release packaging as `tars-agent` (`LICENSE`/`py.typed`/entry points/metadata `--version`/wheel resources);
+F TTY-aware diff/status/`did you mean` suggestions/grouped help/readline setup;
+G injection-resistance (`read_file` + `browser_snapshot` content cannot bypass preview/confirm);
+H `tars-memory correct` with `corrected_reason`, excluded from `recall`/`recall_related`.
 
 ### The one red test, and why it is a good failure
 
@@ -170,7 +191,11 @@ model is live so it is never a mystery.
 
 ---
 
-## 6. Remaining after the REPL
+## 6. What remains after v1 — measured, not guessed
+
+v1 (`b3699ed`) closed slices A-H; `e3a0ea7` hardens the three post-tag errata
+without moving the tag. The pre-existing untracked `docs/` and `tars_prompts/`
+directories are preserved.
 
 1. **`browser-test-efficient` — SHIPPED + live-verified + loop-wired.**
    `tars/browser` provides a lazy, optional Playwright/Chromium `BrowserSession`
@@ -291,18 +316,13 @@ Applied to everything above, and to everything still to come:
 
 ---
 
-## 9. Next steps
+## 9. Next steps — v1 is done
 
-1. ~~Fix the seam, build the loop, ship `tars`~~ — done, live-verified
-   (see §5).
-2. ~~A live `/run` on a repo with a real check surface~~ — done, verified
-   2026-08-26 (FAIL → PASS graded by real pytest).
-3. ~~GPT-5.6 provider path~~ — **blocked on AgentRouter's client whitelist**
-   (probed; see §6 item 3). Parked until a whitelisted client or new
-   credentials exist.
-4. **Session persistence** — shipped 2026-08-26 (commit `75b766c`); design
-   proposal lives at `.tars-proposals/session-persistence.md`. Known
-   simplification: `/status` listing reads whole files, not just first/last
-   events.
-5. Then §6 in order: semantic recall (design conversation first), then
-   browser-test-efficient, then the smaller optional items.
+1. ~~Fix the seam, build the loop, ship `tars`~~ — done, live-verified (see §5).
+2. ~~A live `/run` on a repo with a real check surface~~ — done, verified 2026-08-26 (FAIL → PASS graded by real pytest).
+3. ~~GPT-5.6 provider path~~ — **blocked on AgentRouter's client whitelist** (probed; see §6 item 3). Parked until a whitelisted client or new credentials exist.
+4. ~~Session persistence~~ — shipped 2026-08-26 (`75b766c`); `/status` listing reads whole files (known simplification).
+5. ~~Semantic recall + browser-test-efficient~~ — both shipped + live-verified (see §6).
+6. **v1 slices A-H** — done at `b3699ed`, detailed in `V1.md` (untrusted context, checkpoints/undo, interrupt+fsync, harness+streaming+browser controls, `tars-agent` packaging, CLI feedback, injection-resistance, memory corrections).
+7. **Post-v1 hardening `e3a0ea7`** — done on top of the tag: `input()`+delimiters so `/ver<Tab>` expands, wheel `pipx` install succeeds (published-name `pipx install tars-agent` stays a release limitation until `tars-agent` is published to PyPI), `anchored` as safe alias. Tag `b3699ed` remains immutable.
+8. **Only remaining work is release, not build:** push `e3a0ea7` to `origin/master` and, when ready, publish `tars-agent` to PyPI (which will close the last documented `pipx` limitation). No code slices remain. Untracked `docs/` + `tars_prompts/` are preserved as requested.

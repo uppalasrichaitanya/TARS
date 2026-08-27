@@ -65,9 +65,12 @@ def test_anchored_kind_is_a_safe_alias_for_anchored_replace(tmp_path: Path) -> N
     path = tmp_path / "code.py"
     path.write_text("x = 1\n", encoding="utf-8")
     previews: list[str] = []
-    result = Toolbox(
-        tmp_path, confirm=lambda preview: previews.append(preview) or True
-    ).dispatch(
+
+    def confirm_preview(preview: str) -> bool:
+        previews.append(preview)
+        return True
+
+    result = Toolbox(tmp_path, confirm=confirm_preview).dispatch(
         ToolCall(
             "1",
             "apply_edit",

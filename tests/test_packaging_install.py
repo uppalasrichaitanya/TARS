@@ -40,8 +40,10 @@ def test_wheel_installs_and_runs_every_console_script(tmp_path: Path) -> None:
         [
             str(bin_dir / "python"),
             "-c",
-            "from importlib.resources import files; "
-            "print(files('tars.router').joinpath('data/labeled_tasks.json').is_file())",
+            (
+                "from importlib.resources import files; "
+                "print(files('tars.router').joinpath('data/labeled_tasks.json').is_file())"
+            ),
         ],
         check=True,
         capture_output=True,

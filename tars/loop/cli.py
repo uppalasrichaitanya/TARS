@@ -17,8 +17,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import NoReturn, TextIO
 
-from .. import router
-from .. import __version__
+from .. import __version__, router
 from ..providers.errors import ProviderError
 from ..router import Classification
 from ._io import provider_message

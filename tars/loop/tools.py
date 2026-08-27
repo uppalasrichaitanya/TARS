@@ -9,8 +9,8 @@ exceptions into the loop.
 from __future__ import annotations
 
 import subprocess
-from difflib import get_close_matches
 from collections.abc import Callable, Mapping
+from difflib import get_close_matches
 from pathlib import Path
 from typing import Any
 

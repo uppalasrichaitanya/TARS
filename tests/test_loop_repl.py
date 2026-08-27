@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import subprocess
 from io import StringIO
 from pathlib import Path
-import subprocess
 
 from tars.loop.session import Session
 from tars.loop.types import RunReport

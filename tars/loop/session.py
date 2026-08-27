@@ -261,6 +261,7 @@ class Session:
                 ["git", "show", f"{self.checkpoint_sha}:{relative}"],
                 cwd=self.root,
                 capture_output=True,
+                check=False,
             )
             if blob.returncode == 0:
                 target.parent.mkdir(parents=True, exist_ok=True)

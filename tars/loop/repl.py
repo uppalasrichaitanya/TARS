@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+import builtins
 import json
 import sys
-import builtins
 from collections.abc import Callable
 from difflib import get_close_matches
 from pathlib import Path
-from typing import Protocol, TextIO
+from typing import Protocol, TextIO, cast
 
 from .. import memory, router, verification
 from ..memory.store import MemoryStore
@@ -70,7 +70,7 @@ class Repl:
         self.store = store or MemoryStore(root=self.session.root)
         self._color = color_enabled(self.stdout)
         self._prompt = is_tty(self.stdout)
-        if self._prompt and is_tty(self.stdin):
+        if self._prompt and is_tty(cast(TextIO, self.stdin)):  # type: ignore[arg-type]
             _install_completion(self.session.root)
 
     def run(self) -> int:
@@ -99,7 +99,7 @@ class Repl:
             self._prompt
             and self.stdin is sys.stdin
             and self.stdout is sys.stdout
-            and is_tty(self.stdin)
+            and is_tty(cast(TextIO, self.stdin))  # type: ignore[arg-type]
         )
 
     def _dispatch(self, line: str) -> bool:

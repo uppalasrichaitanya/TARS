@@ -19,8 +19,8 @@ from ..providers.errors import (
 )
 from ..router import Classification
 from ..verification import GateReport
-from .session import Session
 from ._io import color_diff
+from .session import Session
 from .tools import Toolbox
 from .types import RunPromptSpec, RunReport, ToolCall, ToolResult
 
