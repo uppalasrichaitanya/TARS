@@ -40,7 +40,7 @@ tars = "tars.loop.cli:main"
 tars-browser = "tars.browser.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["tars*"]
+include = ["tars"]
 
 # The router's labeled set is read out of the installed package with
 # importlib.resources, so it has to be declared or it ships only in the source

@@ -18,6 +18,20 @@ dist/
 .env.*
 !.env.example
 
+# Dev scaffolding — not part of the product, not shipped to PyPI.
+# Kept locally if needed, but never committed (overnight_build.sh used
+# `git add -A` which would otherwise commit them).
+overnight_build.sh
+run/
+.tars/
+.tars-proposals/
+
+# Working prompt drafts — harness prompt + scratch docs. Useful during
+# development, but not part of the repo or the wheel.
+docs/
+tars_prompts/
+tars-prompts/
+
 # Tool caches that write their own ignore files, listed anyway so a fresh
 # checkout on a machine with older tooling behaves the same.
 .ruff_cache/
