@@ -68,6 +68,7 @@ def render_readme(
     for section in (
         _why(facts),
         _install(facts),
+        _quickstart(facts),
         _how_to_run(facts),
         _examples(facts, include_unverified=include_unverified),
         _structure(facts),
@@ -154,6 +155,68 @@ def _requirements_line(facts: ProjectFacts) -> str:
     if not facts.requires_python:
         return ""
     return f"Requires Python `{facts.requires_python}`."
+
+
+# ── quick start ───────────────────────────────────────────────────────
+
+
+def _quickstart(facts: ProjectFacts) -> str:
+    if facts.name != "tars-agent":
+        return ""
+    return """## Quick Start
+
+Get TARS running in 60 seconds:
+
+```console
+pipx install tars-agent
+# or: pip install tars-agent
+export ANTHROPIC_AUTH_TOKEN=sk-...      # or OPENROUTER_API_KEY / TOKENROUTER_API_KEY
+export ANTHROPIC_BASE_URL=https://agentrouter.org   # if using AgentRouter
+tars
+```
+
+Inside the REPL, just type what you want — bare prompts run the full
+`ORIENT → CLASSIFY → PLAN → ACT → VERIFY → REFLECT → REPORT` loop:
+
+```console
+tars> Fix the failing test in tests/test_login.py
+tars> Add dark mode to src/App.tsx and verify with tests
+tars> Explain how tars/memory scores candidates
+```
+
+Slash commands force a single phase:
+
+| Command | What it does |
+|---|---|
+| `/run <task>` | Full loop for one task |
+| `/route <task>` | Show tier/blast/reversibility without acting |
+| `/verify` | Run the repo's gate locally (`tars-verify`) |
+| `/memory [approve <id> \\| correct <id> "reason"]` | Review or correct remembered decisions |
+| `/status` | Model, tier, session, last verdict |
+| `/undo` | Restore the pre-ACT Git checkpoint |
+| `/resume [ID]` | Resume a prior session (survives Ctrl-C) |
+| `/pillars` | Show the seven-phase loop |
+
+One-shot (no REPL):
+
+```console
+tars run "Fix bug in app.py --yes"
+tars route "Add a new CLI flag"
+```
+
+**Configure the cheapest model for simple tasks:**
+
+```console
+export TARS_TIER0_MODEL=openrouter:minimax/minimax-m3:free
+# tier 0 (scaffold/create-artifact) uses this; tiers 1-2 stay on the flagship
+```
+
+**Browser testing (optional):**
+
+```console
+pip install "tars-agent[browser]"
+tars run "Check https://example.com loads and has a login button" --web-url https://example.com --web-expect "login"
+```"""
 
 
 # ── how to run it ─────────────────────────────────────────────────────────

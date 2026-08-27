@@ -32,6 +32,16 @@ docs/
 tars_prompts/
 tars-prompts/
 
+# Local assistant configs
+.claude/
+
+# Handover / internal docs — kept locally for development, not part of
+# the published package. The public README is the user-facing entry point.
+AGENTS.md
+map.md
+master_agent_loop.md
+V1.md
+
 # Tool caches that write their own ignore files, listed anyway so a fresh
 # checkout on a machine with older tooling behaves the same.
 .ruff_cache/
