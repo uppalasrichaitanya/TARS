@@ -147,5 +147,8 @@ def main(
             provider_message(exc) + "\n→ run 'tars setup' to configure a provider\n"
         )
         return EXIT_PROVIDER
+    except KeyboardInterrupt:
+        err.write("interrupted; no final report was produced\n")
+        return EXIT_PROVIDER
     write_report(report, out)
     return EXIT_FAILED if report.verification_passed is False else EXIT_OK

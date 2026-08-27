@@ -105,3 +105,24 @@ def test_cli_truncates_html_provider_error_body(tmp_path: Path) -> None:
         + "\n"
         + "→ run 'tars setup' to configure a provider\n"
     )
+
+
+def test_cli_turns_keyboard_interrupt_into_clean_exit(tmp_path: Path) -> None:
+    from tars.loop.cli import EXIT_PROVIDER, main
+
+    class InterruptedEngine:
+        def run(self, spec, session, *, output):
+            raise KeyboardInterrupt
+
+    err = StringIO()
+    assert (
+        main(
+            ["run", "wait", "--root", str(tmp_path)],
+            stdout=StringIO(),
+            stderr=err,
+            engine=InterruptedEngine(),
+        )
+        == EXIT_PROVIDER
+    )
+    assert "interrupted" in err.getvalue()
+    assert "Traceback" not in err.getvalue()

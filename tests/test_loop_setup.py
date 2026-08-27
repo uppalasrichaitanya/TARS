@@ -32,6 +32,7 @@ def test_setup_writes_user_config_validates_and_never_prints_secret(
     assert seen == ["agentrouter:claude-opus-5"]
     assert secret not in out.getvalue()
     assert "ANTHROPIC_AUTH_TOKEN" in target.read_text(encoding="utf-8")
+    assert "TARS_MODEL=agentrouter:claude-opus-5" in target.read_text(encoding="utf-8")
     assert target.stat().st_mode & 0o777 == 0o600
 
 
@@ -55,6 +56,28 @@ def test_second_run_can_load_the_user_config(tmp_path: Path, monkeypatch) -> Non
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     load_env(home=tmp_path, cwd=tmp_path / "elsewhere")
     assert os.environ["OPENROUTER_API_KEY"] == secret
+
+
+def test_setup_selects_the_configured_provider_as_active_model(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from tars.loop.setup import run_setup
+
+    answers = iter(["3", "1"])
+    monkeypatch.delenv("TOKENROUTER_API_KEY", raising=False)
+    assert (
+        run_setup(
+            input_fn=lambda _prompt: next(answers),
+            secret_fn=lambda _prompt: "token-key",
+            output=StringIO(),
+            home=tmp_path,
+            cwd=tmp_path,
+            validate=lambda _model: None,
+        )
+        == 0
+    )
+    text = (tmp_path / ".config" / "tars" / "env").read_text(encoding="utf-8")
+    assert "TARS_MODEL=tokenrouter:qwen/qwen3.8-max-free" in text
 
 
 def test_setup_preserves_existing_values_in_target(tmp_path: Path, monkeypatch) -> None:

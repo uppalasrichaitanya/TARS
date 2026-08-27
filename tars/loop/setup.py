@@ -143,6 +143,9 @@ def run_setup(
     else:
         output.write("Unknown provider; setup skipped.\n")
         return 2
+    # Make the provider just validated the active default; otherwise the next
+    # bare `tars` run would silently fall back to direct Anthropic.
+    values["TARS_MODEL"] = model_to_validate
     old_values = {key: os.environ.get(key) for key in values}
     os.environ.update(values)
     providers.reset_providers()
